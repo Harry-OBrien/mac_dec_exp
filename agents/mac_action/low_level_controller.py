@@ -13,6 +13,10 @@ class Navigation_Controller:
         self._current_goal = None
         self._next_step = 1
       
+    def episode_reset(self):
+        self._next_step = 1
+        self._current_goal = None
+
     def reached_goal(self):
         pos = self._location.get_pos()
 
@@ -30,7 +34,6 @@ class Navigation_Controller:
             self._current_goal = new_goal
             try:
                 self._calculate_path()
-                self._next_step = 1
             except Path_Not_Found_Error:
                 raise Path_Not_Found_Error()
 
@@ -43,10 +46,10 @@ class Navigation_Controller:
             Action to do next: Str ("left", "right" "forward")
             or None if no action can be made
         """
-        
         pos = self._location.get_pos()
         assert pos != None
 
+        # TODO: Case where goal is blocked
         if not self._path_is_legal():
             self._calculate_path()
 
@@ -57,12 +60,19 @@ class Navigation_Controller:
         # If we're not at our current goal
         if not self.reached_goal():
             (next_y, next_x) = self._path.path_get(self._next_step)
-            # TODO: Check if the next square is next to us (we might have gone the wrong way :/ )
-            
+
             (y, x) = pos
 
             delta_x = next_x - x
             delta_y = next_y - y
+
+            # We might have (randomly) gone the wrong way because of the 'movement_failure_prob' param
+            # in the environment, so just recalculate the path to our goal
+            if (delta_x >= 1 and delta_y >= 1) or (delta_x <= -1 and delta_y <= -1):
+                self._calculate_path()
+                (next_y, next_x) = self._path.path_get(self._next_step)
+                delta_x = next_x - x
+                delta_y = next_y - y
 
             assert delta_x != delta_y   # no diagonals and no '0' moves
 
@@ -106,5 +116,7 @@ class Navigation_Controller:
         self._path = self._path_planner.compute_route(self._location.get_pos(), self._current_goal, self._maps.get_maps())
         if self._path == None:
             raise Path_Not_Found_Error()
+        
+        self._next_step = 1
 
         

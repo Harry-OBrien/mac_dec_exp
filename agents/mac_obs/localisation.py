@@ -6,6 +6,9 @@ class Localisation:
     """
     The localisation sub-module determines the robot's global position 𝑥𝑖 ∈ 𝑋, with respect to a world coordinate frame.
     """
+    def __init__(self):
+        self._pos = None
+
     def get_pos(self):
         return self._pos
         

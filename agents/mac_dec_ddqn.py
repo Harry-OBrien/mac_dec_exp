@@ -136,9 +136,13 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
 
     # TODO: Implement
     def reset_observations(self):
-        pass
+        print("resetting agent!")
+        self.mapping.reset_maps()
+        self.localiser.update_location(None)
+        self.navigator.episode_reset()
 
     def target_update(self):
+        return
         weights = self.model.model.get_weights()
         self.target_model.model.set_weights(weights)
 

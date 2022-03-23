@@ -109,8 +109,14 @@ class Goal_Extractor:
     def _select_goal_locations(self, clusters, centroids):
         best_idxs = [0] * 4
 
+        # make sure we have options available for the network to choose
         for i, cluster in enumerate(clusters):
-            assert(len(cluster) > 0)
+            if len(cluster) <= 0:
+                clusters[i] = clusters[max(0, i-2)]
+
+        for i, cluster in enumerate(clusters):
+            assert len(cluster) > 0
+
             best_score = 0
             for j, point in enumerate(cluster):
                 new_points = centroids

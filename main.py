@@ -2,12 +2,7 @@ from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
 from env.multi_agent_grid import make_env
 # from keras.callbacks import History
 # from rl.callbacks import CallbackList
-import numpy as np
-
-# TO CONTINUE:
-#   About to implement communication between teammates to share info
-#   both client and env side not yet started
-#   look at get_action method of agent for naming
+# import numpy as np
 
 def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
 
@@ -34,8 +29,7 @@ def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
             if visualise and i % len(agents) == 0:
                 env.render()
 
-        for agent_id in env.agents:
-            agent = agents[agent_id]
+        for agent in agents.values():
             agent.replay()
             agent.target_update()
             rewards[agent_id].append(episode_rewards[agent_id])
@@ -50,7 +44,7 @@ def main():
 
     env_config = {
         "map_shape":(20, 20),
-        "n_agents":1,
+        "n_agents":2,
         "seed":0,
         "clutter_density":0.0,
         "max_steps":500,
