@@ -195,7 +195,6 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
                 "explored_space":pad_array(occlusion_mask, 0, *offsets),
                 "bounds":bounds,
                 "pos":self._agent_locations[agent],
-                "dir":self._agent_orientations[agent]
             }
         
         returns
@@ -208,7 +207,7 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
         self.mapping.append_observation(observation["obstacles"], observation["explored_space"], observation["robot_positions"], observation["bounds"])
 
         # Update location
-        self.localiser.update_location(observation["pos"], observation["dir"])
+        self.localiser.update_location(observation["pos"])
 
         # find teammates and share data
         self.teammate_detector.update_observation(observation["robot_positions"])
@@ -224,7 +223,7 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
             self._select_new_macro_action()
 
         next_move = self.navigator.next_move()
-        moves=["left", "forward", "right"]
+        moves=["up", "right", "down", "left", "no move"]
         print("this move:", moves[next_move])
         return next_move
 

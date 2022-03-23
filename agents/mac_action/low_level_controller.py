@@ -44,9 +44,8 @@ class Navigation_Controller:
             or None if no action can be made
         """
         
-        direction = self._location.get_dir()
         pos = self._location.get_pos()
-        assert direction!= None and pos != None
+        assert pos != None
 
         if not self._path_is_legal():
             self._calculate_path()
@@ -65,56 +64,30 @@ class Navigation_Controller:
             delta_x = next_x - x
             delta_y = next_y - y
 
-            assert delta_x != 0 or delta_y != 0
+            assert delta_x != delta_y   # no diagonals and no '0' moves
 
             # change in y
-            NORTH = 0
-            EAST = 1
-            SOUTH = 2
-            WEST = 3
+            UP = 0
+            RIGHT = 1
+            DOWN = 2
+            LEFT = 3
+            # NO_ACTION = 4
 
-            LEFT = 0
-            FORWARD = 1
-            RIGHT = 2
+            move = 4
 
-            if delta_x == 0:
-                # Going north (up)
-                if delta_y < 0:
-                    if direction == NORTH:
-                        self._next_step += 1
-                        return FORWARD
-                    elif direction == EAST:
-                        return LEFT
-                    elif direction == SOUTH or direction == WEST:
-                        return RIGHT
-                # Going south (down)
-                else:
-                    if direction == NORTH or direction == EAST:
-                        return RIGHT
-                    elif direction == SOUTH:
-                        self._next_step += 1
-                        return FORWARD
-                    elif direction == WEST:
-                        return LEFT
+            if delta_x < 0:
+                move = LEFT
+            elif delta_x > 0:
+                move = RIGHT
+            elif delta_y < 0:
+                move = UP
+            elif delta_y > 0:
+                move = DOWN
             else:
-                # Going east (right)
-                if delta_x > 0:
-                    if direction == NORTH or direction == WEST:
-                        return RIGHT
-                    elif direction == EAST:
-                        self._next_step += 1
-                        return FORWARD
-                    elif direction == SOUTH:
-                        return LEFT
-                # going west (left)
-                else:
-                    if direction == NORTH:
-                        return LEFT
-                    elif direction == EAST or direction == SOUTH:
-                        return RIGHT
-                    elif direction == WEST:
-                        self._next_step += 1
-                        return FORWARD
+                assert False # we shouldn't be here due our previous assertion
+
+            self._next_step += 1
+            return move
 
     def _path_is_legal(self):
         # if any node on our path is occupied, the path is not legal

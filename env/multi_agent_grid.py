@@ -124,7 +124,6 @@ class raw_env(AECEnv):
         self._agent_colours = {agent: colours[i] for i, agent in enumerate(self.possible_agents)}
 
         self._agent_locations = {}
-        self._agent_orientations = {}
 
         # environment spaces
         # (up, right, down, left, nothing) -> 5
@@ -225,7 +224,6 @@ class raw_env(AECEnv):
                 "explored_space":pad_array(occlusion_mask, 0, *offsets),
                 "bounds":bounds,
                 "pos":self._agent_locations[agent],
-                "dir":self._agent_orientations[agent]
             }
         else:
             # Unpadded version
@@ -235,7 +233,6 @@ class raw_env(AECEnv):
                 "explored_space":occlusion_mask,
                 "bounds":bounds,
                 "pos":self._agent_locations[agent],
-                "dir":self._agent_orientations[agent]
             }
 
         # update explored area (not applied until all agents have moved)
@@ -270,7 +267,7 @@ class raw_env(AECEnv):
         # print(agent, action)
 
         # Slight chance of robot not doing as expected
-        if self._np_random.uniform() < self._movement_failure_prob:
+        if self._np_random.uniform() < self._movement_failure_prob: 
             action = self._random_move(agent)
 
         current_location = self._agent_locations[agent]
@@ -293,26 +290,9 @@ class raw_env(AECEnv):
             not self._maps["robot_positions"][next_pos]:
             self._agent_locations[agent] = next_pos
 
-
-        # self._agent_locations[agent]
-        # self._agent_orientations[agent]
-
-        # if action == 0: # "up":
-        #     self._agent_orientations[agent] = (self._agent_orientations[agent] - 1) % 4
-        # elif action == 1: # "right":
-        #     self._attempt_forward_move()
-        # elif action == 2: #"down":
-        #     self._agent_orientations[agent] = (self._agent_orientations[agent] + 1) % 4
-        # elif action == 3: # left
-        #     pass
-        # elif action == 4: # (no move)
-        #     pass 
-        # else:
-        #     # Recieved an inproper action
-        #     raise KeyError
-
     def _random_move(self, agent):
-        return self._np_random.choice(self.action_space(agent).n)
+        # We do -1 here because the 
+        return self._np_random.choice(self.action_space(agent).n - 1)
 
     def _point_out_of_bounds(self, pos):
         if pos[0] < 0 or pos[0] >= self._map_shape[0]\
@@ -333,7 +313,7 @@ class raw_env(AECEnv):
         """
         # Find bounds of agent in map
         pos = self._agent_locations[agent]
-        view_bounds = self._get_view_exts(pos, self._agent_view_shape)
+        view_bounds = self._get_view_exts(pos)
         corrected_bounds, offsets = self._correct_bounds(*view_bounds, self._map_shape)
 
         # get the observations
@@ -350,33 +330,11 @@ class raw_env(AECEnv):
 
         return observation, corrected_bounds, offsets, mask
                 
-    def _get_view_exts(self, pos, dir, view_dim):
+    def _get_view_exts(self, pos):
         """
         Get the extents of the set of tiles visible to the agent
         Note: the indices COULD be out of bounds and need to be checked for
         """
-        # if dir == 0:
-        #     topY = pos[0] - view_dim[0] + 1
-        #     topX = pos[1] - view_dim[1] // 2
-        # # Facing right
-        # elif dir == 1:
-        #     topY = pos[0] - view_dim[0] // 2
-        #     topX = pos[1]
-        # # Facing down
-        # elif dir == 2:
-        #     topY = pos[0]
-        #     topX = pos[1] - view_dim[1] // 2
-        # # Facing left
-        # elif dir == 3:
-        #     topY = pos[0] - view_dim[0] // 2
-        #     topX = pos[1] - view_dim[1] + 1
-        # else:
-        #     raise KeyError
-
-        # botY = topY + view_dim[0]
-        # botX = topX + view_dim[1]
-
-        # return topY, botY, topX, botX
         h, w = self._agent_view_shape
         offset_h = h//2
         offset_w = w//2
@@ -439,20 +397,6 @@ class raw_env(AECEnv):
         
         y = clamp(h//2 - ty_off + by_off, 0, h-1)
         x = clamp(w//2 - tx_off + bx_off, 0, w-1)
-
-        # y, x = None, None
-        # if direction == 0:
-        #     y = h - 1
-        #     x = clamp(w//2 - tx_off + bx_off, 0, w-1)
-        # elif direction == 1:
-        #     y = clamp(h//2 - ty_off + by_off, 0, h-1)
-        #     x = 0
-        # elif direction == 2:
-        #     y = 0
-        #     x = clamp(w//2 - tx_off + bx_off, 0, w-1)
-        # elif direction == 3:
-        #     y = clamp(h//2 - ty_off + by_off, 0, h-1)
-        #     x = w - 1
             
         return (y, x)
         
@@ -608,7 +552,6 @@ class raw_env(AECEnv):
                     "explored_space":pad_array(occlusion_mask, 0, *offsets),
                     "bounds":bounds,
                     "pos":self._agent_locations[agent],
-                    "dir":self._agent_orientations[agent]
                 }
             else:
                 # Unpadded version
@@ -618,7 +561,6 @@ class raw_env(AECEnv):
                     "explored_space":occlusion_mask,
                     "bounds":bounds,
                     "pos":self._agent_locations[agent],
-                    "dir":self._agent_orientations[agent]
                 }
 
             # update explored area (not applied until all agents have moved)
@@ -652,28 +594,6 @@ class raw_env(AECEnv):
 
     # MARK: Render
     def render(self, mode="human"):
-        '''
-        Renders the environment. In human mode, it can print to terminal, open
-        up a graphical window, or open up some other display that a human can see and understand.
-        '''
-        # if self._overlay_maps:
-        #     output_map = self._maps["obstacles"].copy() & self._maps["explored_space"]
-        #     for i, agent in enumerate(self.agents):
-        #         loc = self._agent_locations[agent]
-        #         output_map[loc] = 10 * (i + 1) + self._agent_orientations[agent]
-
-        #     print("RENDER:", output_map, sep="\n")
-        # else:
-        #     output_map_1 = self._maps["obstacles"].copy()# & self._maps["explored_space"]
-        #     output_map_2 = self._maps["explored_space"].copy()
-        #     # output_map &= self._maps["explored_space"]
-        #     for i, agent in enumerate(self.agents):
-        #         loc = self._agent_locations[agent]
-        #         output_map_1[loc] = 10 * (i + 1) + self._agent_orientations[agent]
-        #         output_map_2[loc] = 10 * (i + 1) + self._agent_orientations[agent]
-
-        #     print("RENDER:", output_map_1, output_map_2, sep="\n")
-
         SCREEN_SIZE = 500
         square_dimension = 0.0
 
