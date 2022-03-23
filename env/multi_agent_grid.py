@@ -114,10 +114,10 @@ class raw_env(AECEnv):
         self._agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
         colours = [
             (255, 0, 0),        # Red
-            (0, 255, 0),        # Grn
-            (0, 0, 255),        # Blu
-            (255, 255, 0),      # Yel
-            (255, 0, 255),      # Purp
+            (0, 255, 0),        # Green
+            (0, 0, 255),        # Blue
+            (255, 255, 0),      # Yellow
+            (255, 0, 255),      # Purple
             (0, 255, 255)]      # Turqoise
         
         assert self._n_agents <= len(colours)
@@ -272,6 +272,7 @@ class raw_env(AECEnv):
 
         current_location = self._agent_locations[agent]
 
+        next_pos = None
         try:
         # up, right, down, left, nothing
             offsets = [(-1, 0), (0, 1), (1, 0), (0, -1), (0, 0)]
@@ -594,6 +595,7 @@ class raw_env(AECEnv):
 
     # MARK: Render
     def render(self, mode="human"):
+        print(self._agent_locations["agent_0"])
         SCREEN_SIZE = 500
         square_dimension = 0.0
 
@@ -618,29 +620,28 @@ class raw_env(AECEnv):
                     self._viewer.add_geom(square)
                     self._viewer.add_geom(border)
 
-        for i, row in enumerate(self._maps["obstacles"]):
-            for j, object_exists in enumerate(row):
-                square = self._rendering_grid[i][j]
+        for i in range(self._map_shape[0]):
+            for j in range(self._map_shape[1]):
+                square = self._rendering_grid[self._map_shape[0] - 1 - i][j]
 
                 # If a robot exists in this square
-                if (self._maps["robot_positions"][i][j] != 0):
+                if (self._maps["robot_positions"][i, j] != 0):
                     #robot's pos
-                    # TODO: DON'T RELY ON THE INDEX OF SELF.AGENTS
-                    agent = "agent_" + str(self._maps["robot_positions"][i][j] - 1)
+                    agent = "agent_" + str(self._maps["robot_positions"][i, j] - 1)
                     try:
                         square.set_color(*self._agent_colours[agent])
                     except KeyError:
                         print(agent, "don't exists broski")
 
                 # if unexplored
-                elif not self._maps["explored_space"][i][j]:
-                    if (object_exists == 0):
+                elif not self._maps["explored_space"][i, j]:
+                    if (not self._maps["obstacles"][i, j]):
                         square.set_color(0.8, 0.8, 0.8)
                     else:
                         square.set_color(0.3, 0.3, 0.3)
 
                 # Square is explored and blocked
-                elif (object_exists):
+                elif (self._maps["obstacles"][i, j]):
                     square.set_color(0, 0, 0)
 
                 # square is explored and empty

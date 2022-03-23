@@ -227,6 +227,8 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
             self._select_new_macro_action()
 
         next_move = self.navigator.next_move()
+        assert next_move is not None
+
         moves=["up", "right", "down", "left", "no move"]
         print("this move:", moves[next_move])
         return next_move

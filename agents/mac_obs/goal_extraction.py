@@ -22,7 +22,17 @@ class Goal_Extractor:
         (_, frontier_idxs) = self._generate_frontier_map(self._frontier_width, maps["explored_space"], maps["obstacles"])
 
         # cluster points into 4 groups
-        clusters, centroids = self._cluster(4, frontier_idxs)
+        if len(frontier_idxs) >= 4:
+            clusters, centroids = self._cluster(4, frontier_idxs)
+        else:
+            unexplored_count = len(frontier_idxs)
+            goals = frontier_idxs
+            i = 0
+            while len(goals) != 4:
+                goals.append(goals[i % unexplored_count])
+                i += 1
+
+            return goals
         
         # choose 1 point from each cluster that are as far as possible from each other
         return self._select_goal_locations(clusters, centroids)
@@ -35,7 +45,7 @@ class Goal_Extractor:
         # find boundary
         explored_indices = np.where(explored==1)
 
-        # repeat for n steps to define border width
+        # repeat for n steps to define frontier width
         for _ in range(frontier_width):
             explored_indices = self._frontier_for_region(np.array(explored_indices), frontier_map, explored, obstacles)
             frontier_idxs.extend(zip(explored_indices[0], explored_indices[1]))
@@ -43,31 +53,34 @@ class Goal_Extractor:
             for i in range(len(explored_indices[0])):
                 frontier_map[explored_indices[0][i], explored_indices[1][i]] = 1
 
+        assert len(frontier_idxs) == len(np.unique(frontier_idxs, axis=0))
         return (frontier_map, frontier_idxs)
 
     def _frontier_for_region(self, region, frontier_map, explored, obstacles):
         frontier_indices = ([], [])
-        map_width, map_height = frontier_map.shape
+        map_height, map_width = frontier_map.shape
         
         for i in range(len(region[0])):
-            x, y = (region[0, i], region[1, i])
+            y, x = (region[0, i], region[1, i])
 
             offsets = [(-1, 0), (0, 1), (1, 0), (0, -1)]
             for offset in offsets:
-                x_frontier, y_frontier = (x + offset[0], y + offset[1])
+                y_frontier, x_frontier = (y + offset[0], x + offset[1])
 
-                # Check if we're currently on an obstacle or idx is out of bounds
-                if obstacles[x,y]\
-                    or x_frontier < 0 or x_frontier >= map_width\
-                    or y_frontier < 0 or y_frontier >= map_height:
+                # Check if we're currently on an obstacle or new idx is out of bounds
+                if  obstacles[y, x]\
+                        or x_frontier < 0 or x_frontier >= map_width\
+                        or y_frontier < 0 or y_frontier >= map_height:
                     continue
 
                 # Check if this is a valid point for the frontier
-                if not frontier_map[x_frontier, y_frontier] and\
-                    not explored[x_frontier, y_frontier] and\
-                    not obstacles[x_frontier, y_frontier]:
-                    frontier_indices[0].append(x_frontier)
-                    frontier_indices[1].append(y_frontier)
+                if not frontier_map[y_frontier, x_frontier] and\
+                    not explored[y_frontier, x_frontier] and\
+                    not obstacles[y_frontier, x_frontier]:
+
+                    frontier_indices[0].append(y_frontier)
+                    frontier_indices[1].append(x_frontier)
+                    frontier_map[y_frontier, x_frontier] = 1
 
         return frontier_indices
 
@@ -108,11 +121,6 @@ class Goal_Extractor:
 
     def _select_goal_locations(self, clusters, centroids):
         best_idxs = [0] * 4
-
-        # make sure we have options available for the network to choose
-        for i, cluster in enumerate(clusters):
-            if len(cluster) <= 0:
-                clusters[i] = clusters[max(0, i-2)]
 
         for i, cluster in enumerate(clusters):
             assert len(cluster) > 0

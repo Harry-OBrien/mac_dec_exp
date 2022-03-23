@@ -12,7 +12,7 @@ class Navigation_Controller:
         self._path_planner = Path_Planner(self._maps.get_shape())
         self._current_goal = None
         self._next_step = 1
-      
+
     def episode_reset(self):
         self._next_step = 1
         self._current_goal = None
@@ -30,12 +30,14 @@ class Navigation_Controller:
         # Arguments:
             goal_pos: Tuple (Int, Int)
         """
-        if self._current_goal != new_goal:
+        if self._current_goal is None or self._current_goal[0] != new_goal[0] or self._current_goal[1] != new_goal[1]:
+            print("goal set exclamation point!")
             self._current_goal = new_goal
-            try:
-                self._calculate_path()
-            except Path_Not_Found_Error:
-                raise Path_Not_Found_Error()
+        try:
+            print("calculating new path!")
+            self._calculate_path()
+        except Path_Not_Found_Error:
+            raise Path_Not_Found_Error()
 
     def next_move(self):
         """
@@ -43,8 +45,7 @@ class Navigation_Controller:
         search from the path planner.
 
         # Returns
-            Action to do next: Str ("left", "right" "forward")
-            or None if no action can be made
+            Action to do next in range n_actions or None if no action can be made
         """
         pos = self._location.get_pos()
         assert pos != None
@@ -55,7 +56,8 @@ class Navigation_Controller:
 
         # If we don't have a path, there is no next action to take
         if self._path == None:
-            return None
+            print("WARN: Asked for the next move before setting a goal location")
+            return 4
 
         # If we're not at our current goal
         if not self.reached_goal():
@@ -81,9 +83,9 @@ class Navigation_Controller:
             RIGHT = 1
             DOWN = 2
             LEFT = 3
-            # NO_ACTION = 4
+            NO_ACTION = 4
 
-            move = 4
+            move = NO_ACTION
 
             if delta_x < 0:
                 move = LEFT
@@ -98,13 +100,17 @@ class Navigation_Controller:
 
             self._next_step += 1
             return move
+        else:
+            print("WARN: somehow we've reached the goal but you're still asking for the next move???")
+            return 4
 
     def _path_is_legal(self):
         # if any node on our path is occupied, the path is not legal
-        if self._path == None:
+        if self._path is None:
             return False
 
         obstacle_map = self._maps.get_maps()["obstacles"]
+
         for i in range(self._path.path_len()):
             node = self._path.path_get(i)
             if obstacle_map[node]:

@@ -18,10 +18,10 @@ class path_t:
             if (u == pred_u):
                 break
             u = pred_u
-            
+
         self.set_up(len)
         u = v
-        
+
         while (True):
             len = len - 1
             self.path_set(len, u)

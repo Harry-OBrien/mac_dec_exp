@@ -44,7 +44,7 @@ def main():
 
     env_config = {
         "map_shape":(20, 20),
-        "n_agents":2,
+        "n_agents":4,
         "seed":0,
         "clutter_density":0.0,
         "max_steps":500,
