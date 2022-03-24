@@ -26,51 +26,95 @@ class Local_Map:
         """
         self._maps = {"explored_space":  np.zeros(self.map_dim, dtype=int),
                       "obstacles":       np.zeros(self.map_dim, dtype=int),
-                      "robot_positions": np.zeros(self.map_dim, dtype=int),
                       "goal_candidates": np.zeros(self.map_dim, dtype=int)}
+
+        self._teammate_locations = {}
+        self._teammate_last_goals = {}
+        self._teammate_current_goals = {}
 
     def get_shape(self):
         return self.map_dim
+
+    def agent_locations(self):
+        return self._teammate_locations.copy()
 
     def get_maps(self):
         """
         Gets the agent's local maps
 
         # Returns
-        4 binary feature maps of the explored space, obstacles, observed robot positions, and goal candidates
+        5 binary feature maps of the explored space, obstacles, observed robot positions, and goal candidates
         """
-        return self._maps
+        output_maps = self._maps.copy()
+
+        output_maps["robot_positions"] = np.zeros(self.map_dim, dtype=int)
+        for loc in self._teammate_locations.items():
+            output_maps["current_goals"][loc] = 1
+
+        output_maps["teammate_last_goals"] = np.zeros(self.map_dim, dtype=int)
+        for last_goal in self._teammate_last_goals.items():
+            output_maps["current_goals"][last_goal] = 1
+
+        output_maps["teammate_current_goals"] = np.zeros(self.map_dim, dtype=int)
+        for goal in self._teammate_current_goals.items():
+            output_maps["current_goals"][goal] = 1
+
+        # Now contains:
+        #   explored_space
+        #   obstacles
+        #   robot_positions
+        #   (teammate) last_goals
+        #   (teammate) current_goals
+        #   (our) goal_candidates
+        return output_maps
 
     @property
     def explored_ratio(self):
         return np.count_nonzero(self._maps["explored_space"]) / self.n_elements
 
-    def append_observation(self, obstacle_observation, explored_observation, teammate_observation, observation_bounds):
+    def append_observation(self, obstacle_observation, explored_observation, robot_positions, teammates_in_range, observation_bounds):
+        # Split the bounds tuple into components
         topY, botY, topX, botX = observation_bounds
 
+        # apply onto map
         self._maps["explored_space"][topY:botY, topX:botX] |= explored_observation
         self._maps["obstacles"][topY:botY, topX:botX] |= obstacle_observation
 
-        # TODO: Only remove position of teammates if we can see them in this observation
-        self._maps["robot_positions"] = np.zeros(self.map_dim, dtype=int)
-        self._maps["robot_positions"][topY:botY, topX:botX] |= teammate_observation
+        # find teammates in range and update their locations
+        if not teammates_in_range:
+            return
+        
+        for i, row in enumerate(range(topY, botY)):
+            for j, col in enumerate(range(topX, botX)):
+                robot_id = robot_positions[i, j]
+                if robot_id == 0:
+                    continue
+
+                self._teammate_locations[robot_id - 1] = (row, col)
 
     def set_goal_candidates(self, goal_candidates):
         self._maps["goal_candidates"] = np.zeros(self.map_dim, dtype=int)
         for candidate in goal_candidates:
             self._maps["goal_candidates"][candidate] = 1
 
-    def import_shared_map(self, shared_maps):
+    def import_shared_map(self, shared_maps, teammate_id, last_goal, current_goal):
         """
         Merges the agent's local map and the map of another agent.
         This is really easy as the agent's have perfect observation and localisation skills, so it's a case of putting a 1
         in the maps where there wasn't one
 
         # Argument
-            shared_maps: The other agent's maps as 4 binary feature maps
+            shared_maps: The other agent's maps
+            agent id as an int
+            last goal
+            current goal
         """
-        for key, shared_map in shared_maps.items():
-            if key == "goal_candidates":
-                continue
+        # maps
+        self._maps["explored_space"] |= shared_maps["explored_space"]
+        self._maps["obstacles"] |= shared_maps["obstacles"]
 
-            self._maps[key] |= shared_map
+        # last goal
+        self._teammate_last_goals[teammate_id] = last_goal
+
+        # current goal
+        self._teammate_last_goals[teammate_id] = current_goal

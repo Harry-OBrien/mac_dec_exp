@@ -1,4 +1,5 @@
-from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
+# from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
+from agents.nearest_frontier import NearestFrontierAgent
 from env.multi_agent_grid import make_env
 # from keras.callbacks import History
 # from rl.callbacks import CallbackList
@@ -11,6 +12,7 @@ def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
     # Start training
     for _ in range(nb_episodes):
         env.reset()
+       
         episode_rewards={agent: 0 for agent in env.agents}
         episode_rewards["global"] = 0
 
@@ -18,6 +20,7 @@ def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
             agent = agents[agent_id]
             state, reward, done, _ = env.last()
 
+            # TODO: IF we are done, we should probs let the agent know about this so it can save the macro action to replay mem
             action = None if done else agent.get_action(state)
             env.step(action)
 
@@ -46,11 +49,12 @@ def main():
         "map_shape":(20, 20),
         "n_agents":4,
         "seed":0,
-        "clutter_density":0.0,
-        "max_steps":500,
+        # "clutter_density":0.3,
+        "max_steps":50,
         "pad_output":False,
         "agent_view_shape":(9, 9),
-        "view_offset":4
+        "view_offset":4,
+        "screen_size":900
     }
 
     # Create env
@@ -63,7 +67,7 @@ def main():
         observation_space = env.observation_space(agent).shape
         n_actions = env.action_space(agent).n
 
-        agents[agent] = Mac_Dec_DDQN_Agent(
+        agents[agent] = NearestFrontierAgent(
             n_actions=n_actions, 
             observation_dim=observation_space, 
             map_dim=env_config["map_shape"],

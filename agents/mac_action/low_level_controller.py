@@ -1,13 +1,14 @@
 from .path_planner import Path_Planner
 
-class Path_Not_Found_Error(Exception):
+class PathNotFoundError(Exception):
     """Raised when no path can be found to the given target"""
     pass
 
 class Navigation_Controller:
-    def __init__(self, mapping, localiser):
+    def __init__(self, mapping, localiser, teammate_detector):
         self._maps = mapping
         self._location = localiser
+        self._teammate_detector = teammate_detector
 
         self._path_planner = Path_Planner(self._maps.get_shape())
         self._current_goal = None
@@ -31,13 +32,12 @@ class Navigation_Controller:
             goal_pos: Tuple (Int, Int)
         """
         if self._current_goal is None or self._current_goal[0] != new_goal[0] or self._current_goal[1] != new_goal[1]:
-            print("goal set exclamation point!")
             self._current_goal = new_goal
         try:
-            print("calculating new path!")
             self._calculate_path()
-        except Path_Not_Found_Error:
-            raise Path_Not_Found_Error()
+        except PathNotFoundError:
+            self._current_goal = None
+            raise PathNotFoundError()
 
     def next_move(self):
         """
@@ -50,9 +50,12 @@ class Navigation_Controller:
         pos = self._location.get_pos()
         assert pos != None
 
-        # TODO: Case where goal is blocked
         if not self._path_is_legal():
-            self._calculate_path()
+            try:
+                self._calculate_path()
+            except PathNotFoundError:
+                self._current_goal = None
+                raise PathNotFoundError()
 
         # If we don't have a path, there is no next action to take
         if self._path == None:
@@ -119,9 +122,16 @@ class Navigation_Controller:
         return True
 
     def _calculate_path(self):
-        self._path = self._path_planner.compute_route(self._location.get_pos(), self._current_goal, self._maps.get_maps())
+        nearby_ids = self._teammate_detector.agents_in_range()
+        latest_agent_locations = self._maps.locations_for_agents(nearby_ids)
+
+        obstacle_map = self._maps.get_maps()["obstacles"].copy()
+        for location in latest_agent_locations.values():
+            obstacle_map[location] = 1
+
+        self._path = self._path_planner.compute_route(self._location.get_pos(), self._current_goal, obstacle_map)
         if self._path == None:
-            raise Path_Not_Found_Error()
+            raise PathNotFoundError()
         
         self._next_step = 1
 

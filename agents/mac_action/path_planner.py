@@ -9,7 +9,7 @@ class Path_Planner:
         self._map_height, self._map_width = map_dim
         self._num_nodes = self._map_height * self._map_width
 
-    def compute_route(self, start_pos, end_pos, maps):
+    def compute_route(self, start_pos, end_pos, obstacle_map):
         """
         Computes a route between two positions using a given map
 
@@ -21,14 +21,14 @@ class Path_Planner:
         # Returns
             Distance between src and dst as a float
         """
-        if start_pos == None or end_pos == None or maps == None:
-            return None
+        assert start_pos is not None or end_pos is not None
+        assert obstacle_map is not None
 
         # Compute the heuristics for the current goal position
-        h = self._calc_heuristic(end_pos, maps["obstacles"])
+        h = self._calc_heuristic(end_pos, obstacle_map)
 
         # perform an a* path finding search
-        result = self.a_star_search(maps["obstacles"], start_pos, end_pos, h)
+        result = self.a_star_search(obstacle_map, start_pos, end_pos, h)
 
         return result
 

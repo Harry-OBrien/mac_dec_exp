@@ -15,10 +15,11 @@ import numpy as np
 
 import sys
 
-LEFT = 0
-FORWARD = 1
-RIGHT = 2
-NO_ACTION = 3
+UP = 0
+RIGHT = 1
+DOWN = 2
+LEFT = 3
+NO_ACTION = 4
 
 class Mac_Dec_DDQN_Agent(Base_Agent):
     def __init__(self, n_actions, observation_dim, map_dim, env, id, update_target_every=1_000, 
@@ -56,9 +57,8 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
         self.memory = SequentialMacroMemory(limit=mem_size, window_length=1)
 
         # Macro action/observation stuff
-        # TODO: Correctly initialise these
         self.localiser = localisation.Localisation()
-        
+
         self.teammate_detector = teammate_detection.Teammate_Detector(env, self._id)
         self.prev_agent_goals = {}
         self.last_known_agent_pos = {}
@@ -80,12 +80,12 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
         # macro_obs_input: 8 vals: 
         #   robot location as 1 hot map (20x20)
         #   teammate(s) in range (1)
-        #   [teammate_info] = {last goal: (20x20), location(20x20), current_goal(20x20)}
+        #   [teammate_info] = {last goal: (20x20), current_goal(20x20)}
         #   percent complete [1]
         #   [our goals](20x20)
 
         map_size = self.state_space[0] * self.state_space[1]
-        input_length = map_size + 1 + map_size + map_size + map_size + 1 + map_size #normally around 2002 values
+        input_length = map_size + 1 + map_size + map_size + 1 + map_size #normally around 1602 values for a 20x20 map
         macro_obs_input = Input(shape=(input_length, ), name="macro_observations_input") 
 
         # First branch is convolutional model to analyse map input
@@ -134,7 +134,6 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
         inputs = [map_input, macro_obs_input]
         return Model(inputs, model_output, name="DEP")
 
-    # TODO: Implement
     def reset_observations(self):
         print("resetting agent!")
         self.mapping.reset_maps()
@@ -200,7 +199,7 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
                 "bounds":bounds,
                 "pos":self._agent_locations[agent],
             }
-        
+
         returns
             action in range 0 -> n_actions - 1
         """
@@ -220,21 +219,39 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
             self.teammate_detector.get_shared_obs()
        
         # If we need to select a new goal location
-        if self.navigator.reached_goal() or teammate_in_range:
-            if self.current_goal is not None:
-                self.memory.append_macro_from_real_time()
+        next_move = self._select_next_move(teammate_in_range)
 
-            self._select_new_macro_action()
-
-        next_move = self.navigator.next_move()
         assert next_move is not None
 
         moves=["up", "right", "down", "left", "no move"]
         print("this move:", moves[next_move])
         return next_move
 
+    def _select_next_move(self, teammate_in_range):
+        mac_dec_selection_success = True
+        if self.navigator.reached_goal() or teammate_in_range:
+            if self.current_goal is not None:
+                self.memory.append_macro_from_real_time()
+
+            mac_dec_selection_success = self._select_new_macro_action()
+
+        if mac_dec_selection_success:
+            try:
+                return self.navigator.next_move()
+            except low_level_controller.PathNotFoundError:
+                return self._select_next_move(teammate_in_range)
+        else:
+            # Explored everything we can
+            return NO_ACTION # No move
+
     def _select_new_macro_action(self):
         observation, goal_candidates = self._compile_macro_observation()
+
+        # There is a case where we may have explored all that we can in an area, but it is NOT the entire map
+        # so the env doesn't think we're finished
+        if len(goal_candidates) == 0:
+            return False
+
         goal_idx = 0
         # goal_idx = self.model.get_action(observation)
         goal_pos = goal_candidates[goal_idx]
@@ -244,7 +261,13 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
         self.current_goal = goal_pos
 
         self.memory.macro_action_begin(observation, goal_idx)
-        self.navigator.set_goal(self.current_goal)
+
+        try:
+            self.navigator.set_goal(self.current_goal)
+        except low_level_controller.PathNotFoundError:
+            return False
+
+        return True
 
     def _compile_macro_observation(self):
         """
@@ -266,7 +289,7 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
         agent_maps = np.stack(local_maps)
 
         percent_explored = self.mapping.explored_ratio
-        
+
         goals = self.goal_extraction.generate_goals()
 
         return {

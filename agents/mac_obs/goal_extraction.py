@@ -15,7 +15,6 @@ class Goal_Extractor:
         self._frontier_width = frontier_width
 
     def generate_goals(self):
-
         maps = self.mapper.get_maps()
 
         # Get frontier indices
@@ -24,6 +23,9 @@ class Goal_Extractor:
         # cluster points into 4 groups
         if len(frontier_idxs) >= 4:
             clusters, centroids = self._cluster(4, frontier_idxs)
+
+        elif len(frontier_idxs) == 0:
+            return []
         else:
             unexplored_count = len(frontier_idxs)
             goals = frontier_idxs
@@ -33,10 +35,19 @@ class Goal_Extractor:
                 i += 1
 
             return goals
-        
+
+        # cluster_map = maps["explored_space"].copy()
+
+        # for i, cluster in enumerate(clusters):
+        #     for point in cluster:
+        #         cluster_map[point] = i + 5
+
+        # cluster_map[0, 7] = 11
+
+        # show_image(cluster_map, vmax=11)
+
         # choose 1 point from each cluster that are as far as possible from each other
         return self._select_goal_locations(clusters, centroids)
-
 
     def _generate_frontier_map(self, frontier_width, explored, obstacles):
         frontier_map = np.zeros_like(explored)
@@ -54,6 +65,7 @@ class Goal_Extractor:
                 frontier_map[explored_indices[0][i], explored_indices[1][i]] = 1
 
         assert len(frontier_idxs) == len(np.unique(frontier_idxs, axis=0))
+        
         return (frontier_map, frontier_idxs)
 
     def _frontier_for_region(self, region, frontier_map, explored, obstacles):
@@ -137,12 +149,12 @@ class Goal_Extractor:
 
         return [clusters[i][pos] for i, pos in enumerate(best_idxs)]
 
-# from matplotlib import pyplot as plt
-# def show_image(img, vmax=1):
+from matplotlib import pyplot as plt
+def show_image(img, vmax=1):
     
-#     plt.imshow(img, cmap='gray', vmin=0, vmax=vmax)
-#     plt.axis('off')
-#     plt.show()
+    plt.imshow(img, cmap='gray', vmin=0, vmax=vmax)
+    plt.axis('off')
+    plt.show()
 
 # if __name__ == "__main__":
 #     goal_generator = Goal_Extractor(frontier_width=2)

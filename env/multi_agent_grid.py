@@ -70,7 +70,7 @@ class raw_env(AECEnv):
 
     def __init__(self, map_shape, n_agents, clutter_density=None, movement_failure_prob=0.0, communication_dropout_prob=0.0, 
                  step_penalty=-1, decay_reward=False, max_steps=250, agent_view_shape=(5,5), view_offset=0, seed=None, transparent_walls=False,
-                 overlay_maps=True, pad_output=True):
+                 overlay_maps=True, pad_output=True, screen_size = 500):
         """
         The init method takes in environment arguments and
         should define the following attributes:
@@ -91,6 +91,7 @@ class raw_env(AECEnv):
         self._transparent_walls = transparent_walls
         self._overlay_maps = overlay_maps
         self._pad_output = pad_output
+        self._SCREEN_SIZE = screen_size
 
         # rendering shite
         self._rendering_grid = [[None] * self._map_shape[1] for _ in range(self._map_shape[0])]
@@ -319,7 +320,7 @@ class raw_env(AECEnv):
 
         # get the observations
         observation = self._map_slice(*corrected_bounds)
-        pos_in_obs = self._pos_in_bounds(corrected_bounds, offsets)
+        pos_in_obs = self._pos_in_bounds(offsets)
 
         # Apply occlusion mask to remove anything that the agent cant see
         mask = np.ones_like(observation, dtype=bool)
@@ -390,14 +391,12 @@ class raw_env(AECEnv):
 
         return slices
 
-    def _pos_in_bounds(self, corrected_bounds, offsets):
-        h, w = (
-            corrected_bounds[1] - corrected_bounds[0],
-            corrected_bounds[3] - corrected_bounds[2])
-        ty_off, by_off, tx_off, bx_off = offsets
+    def _pos_in_bounds(self, offsets):
+        w, h = self._agent_view_shape
+        ty_off, _, tx_off, _ = offsets
         
-        y = clamp(h//2 - ty_off + by_off, 0, h-1)
-        x = clamp(w//2 - tx_off + bx_off, 0, w-1)
+        y = h//2 - ty_off
+        x = w//2 - tx_off
             
         return (y, x)
         
@@ -523,6 +522,8 @@ class raw_env(AECEnv):
         # agent locations        
         for agent in self.agents:
             init_pos = self._choose_starting_pos_for(agent)
+            assert self._maps["obstacles"][init_pos] != 1
+            
             self._agent_locations[agent] = init_pos
 
         self._regenerate_agent_map()
@@ -595,15 +596,13 @@ class raw_env(AECEnv):
 
     # MARK: Render
     def render(self, mode="human"):
-        print(self._agent_locations["agent_0"])
-        SCREEN_SIZE = 500
         square_dimension = 0.0
 
         if self._viewer is None:
             from gym.envs.classic_control import rendering
 
-            square_dimension = SCREEN_SIZE / self._map_shape[0]
-            self._viewer = rendering.Viewer(SCREEN_SIZE, SCREEN_SIZE)
+            square_dimension = self._SCREEN_SIZE / self._map_shape[0]
+            self._viewer = rendering.Viewer(self._SCREEN_SIZE, self._SCREEN_SIZE)
 
             for i in range(self._map_shape[0]):
                 for j in range(self._map_shape[1]):
