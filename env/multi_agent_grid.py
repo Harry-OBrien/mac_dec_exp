@@ -52,8 +52,6 @@ def make_env(map_shape, n_agents, **kwargs):
     The make_env function often wraps the environment in wrappers by default.
     '''
     env = raw_env(map_shape, n_agents, **kwargs)
-
-    unwrapped = env
     
     # This wrapper is only for environments which print results to the terminal
     env = wrappers.CaptureStdoutWrapper(env)
@@ -63,7 +61,7 @@ def make_env(map_shape, n_agents, **kwargs):
     # Strongly recommended
     env = wrappers.OrderEnforcingWrapper(env)
 
-    return env, unwrapped
+    return env
 
 class raw_env(AECEnv):
     metadata = {'render_modes': ['human'], "name": "multi_agent_grid_world_v1"}
@@ -138,6 +136,8 @@ class raw_env(AECEnv):
                                         for agent in self.possible_agents}
 
         self.observation_spaces["global"] = spaces.Box(low=0, high=1, shape=(3, *self._map_shape))
+
+        self.comms_callbacks = {agent: None for agent in self.possible_agents}
 
     @property
     def agent_name_mapping(self, agent_id):
@@ -323,12 +323,15 @@ class raw_env(AECEnv):
         pos_in_obs = self._pos_in_bounds(offsets)
 
         # Apply occlusion mask to remove anything that the agent cant see
-        mask = np.ones_like(observation, dtype=bool)
+        mask = np.ones_like(observation["obstacles"], dtype=bool)
         if not self._transparent_walls:
             mask = self._occlude_mask(~observation["obstacles"].astype(bool), pos_in_obs)
 
-        for key in observation.keys():
-            observation[key] &= mask
+        for key, obs_map in observation.items():
+            for i, row in enumerate(obs_map):
+                for j, _ in enumerate(row):
+                    if not mask[i, j]:
+                        observation[key][i,j] = 0
 
         return observation, corrected_bounds, offsets, mask
                 
@@ -539,7 +542,6 @@ class raw_env(AECEnv):
         self.current_states = {agent: None for agent in self.agents}
         self.observations = {agent: None for agent in self.agents}
         self.num_moves = 0
-        self.comms_callbacks = {agent: None for agent in self.agents}
 
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
@@ -588,9 +590,9 @@ class raw_env(AECEnv):
 
     def _regenerate_agent_map(self):
         agent_map = np.zeros(shape=self._map_shape, dtype=int)
-        for i, agent in enumerate(self.agents):
+        for agent in self.agents:
             pos = self._agent_locations[agent]
-            agent_map[pos] = i + 1
+            agent_map[pos] = int(agent[-1]) + 1
 
         self._maps["robot_positions"] = agent_map
 
@@ -657,21 +659,25 @@ class raw_env(AECEnv):
         tx_agent = self.agents[num_tx_id]
         agent_observation = self.observations[tx_agent]["robot_positions"]
 
+        mapped_id = num_rx_id + 1
         for row in agent_observation:
             for id in row:
-                if id == num_rx_id:
+                if id == mapped_id:
                     return True
         
         return False
 
     def communicate_with_agent(self, num_tx_id, num_rx_id):
-        return False
         """
         Attempts to handle the sharding of two agents that are within sight
 
         # Returns
             true on success, false otherwise
         """
+        if num_tx_id == num_rx_id:
+            print("WARN: Agent is trying to communicate with itself")
+            return False
+
         try:
             tx_agent = self.agents[num_tx_id]
             rx_agent = self.agents[num_rx_id]
@@ -681,6 +687,7 @@ class raw_env(AECEnv):
             
         # Check if tx agent can even see rx agent
         if not self._agent_in_sight(num_tx_id, num_rx_id):
+            print("WARN: Agent thought it could see an agent which it cannot.")
             return False
 
         # Slight chance of communication failing
@@ -688,14 +695,15 @@ class raw_env(AECEnv):
             return False
             
         # callbacks transmit (tx) and reciece (rx)
+        if self.comms_callbacks[rx_agent] is None or self.comms_callbacks[tx_agent] is None:
+            print("WARN: Either", tx_agent, "or", rx_agent, "hasn't registered a callback.")
+            return False
+
         target_cb_tx, target_cb_rx = self.comms_callbacks[rx_agent]
         sender_cb_tx, sender_cb_rx = self.comms_callbacks[tx_agent]
 
-        if target_cb_tx is not None and sender_cb_tx is not None:
-            target_cb_tx(sender_cb_tx())
-        
-        if sender_cb_rx is not None and target_cb_rx is not None:
-            sender_cb_rx(target_cb_rx())
+        target_cb_rx(sender_cb_tx())
+        sender_cb_rx(target_cb_tx())
 
         return True
 

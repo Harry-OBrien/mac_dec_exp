@@ -168,14 +168,4 @@ class Path_Planner:
                     else:
                         pq.DPQ_insert(v_flat, priority)
 
-        # print(pred)
-        # for row in dist:
-        #     for w in row:
-        #         if w.weight_is_finite():
-        #             print("{:.2f}".format(w.weight_to_int()), end="\t")
-        #         else:
-        #             print("inf", end="\t")
-
-        #     print("")
-
         return path_t(pred, dst) if dist[dst].weight_is_finite() else None

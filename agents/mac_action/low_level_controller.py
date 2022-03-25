@@ -12,9 +12,11 @@ class Navigation_Controller:
 
         self._path_planner = Path_Planner(self._maps.get_shape())
         self._current_goal = None
+        self._current_step = 0
         self._next_step = 1
 
     def episode_reset(self):
+        self._current_step = 0
         self._next_step = 1
         self._current_goal = None
 
@@ -50,6 +52,12 @@ class Navigation_Controller:
         pos = self._location.get_pos()
         assert pos != None
 
+        # check that we've moved
+        current_path_pos = self._path.path_get(self._current_step)
+        if pos[0] != current_path_pos[0] and pos[1] != current_path_pos[1]:
+            self._current_step = self._next_step
+            self._next_step += 1
+
         if not self._path_is_legal():
             try:
                 self._calculate_path()
@@ -64,7 +72,7 @@ class Navigation_Controller:
 
         # If we're not at our current goal
         if not self.reached_goal():
-            (next_y, next_x) = self._path.path_get(self._next_step)
+            (next_y, next_x) = self._path.path_get(self._current_step)
 
             (y, x) = pos
 
@@ -75,7 +83,7 @@ class Navigation_Controller:
             # in the environment, so just recalculate the path to our goal
             if (delta_x >= 1 and delta_y >= 1) or (delta_x <= -1 and delta_y <= -1):
                 self._calculate_path()
-                (next_y, next_x) = self._path.path_get(self._next_step)
+                (next_y, next_x) = self._path.path_get(self._current_step)
                 delta_x = next_x - x
                 delta_y = next_y - y
 
@@ -101,7 +109,6 @@ class Navigation_Controller:
             else:
                 assert False # we shouldn't be here due our previous assertion
 
-            self._next_step += 1
             return move
         else:
             print("WARN: somehow we've reached the goal but you're still asking for the next move???")
@@ -122,12 +129,8 @@ class Navigation_Controller:
         return True
 
     def _calculate_path(self):
-        nearby_ids = self._teammate_detector.agents_in_range()
-        latest_agent_locations = self._maps.locations_for_agents(nearby_ids)
-
-        obstacle_map = self._maps.get_maps()["obstacles"].copy()
-        for location in latest_agent_locations.values():
-            obstacle_map[location] = 1
+        local_maps = self._maps.get_maps()
+        obstacle_map = local_maps["obstacles"] | local_maps["robot_positions"]
 
         self._path = self._path_planner.compute_route(self._location.get_pos(), self._current_goal, obstacle_map)
         if self._path == None:

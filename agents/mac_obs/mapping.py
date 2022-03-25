@@ -9,10 +9,11 @@ Local maps are merged when robots are within 𝑑𝑠 to provide updates on expl
 A global map, M, is generated for centralized training, by combining all robots’ local maps at each timestep.
 """
 class Local_Map:
-    def __init__(self, map_dim, view_dim):
+    def __init__(self, map_dim, view_dim, our_numerical_id):
         self.map_dim = map_dim
         self.n_elements = self.map_dim[0] * self.map_dim[1]
         self.view_dim = view_dim
+        self.our_numerical_id = our_numerical_id
 
         # idgaf if you want to see 6 blocks ahead. We do 1, 3, 5, 7, etc only.
         # We could implement custom shapes in the future, but again, idgaf right now :).
@@ -49,15 +50,17 @@ class Local_Map:
 
         output_maps["robot_positions"] = np.zeros(self.map_dim, dtype=int)
         for loc in self._teammate_locations.items():
-            output_maps["current_goals"][loc] = 1
+            output_maps["robot_positions"][loc] = 1
 
         output_maps["teammate_last_goals"] = np.zeros(self.map_dim, dtype=int)
         for last_goal in self._teammate_last_goals.items():
-            output_maps["current_goals"][last_goal] = 1
+            if last_goal is not None:
+                output_maps["teammate_last_goals"][last_goal] = 1
 
         output_maps["teammate_current_goals"] = np.zeros(self.map_dim, dtype=int)
         for goal in self._teammate_current_goals.items():
-            output_maps["current_goals"][goal] = 1
+            if goal is not None:
+                output_maps["teammate_current_goals"][goal] = 1
 
         # Now contains:
         #   explored_space
@@ -87,7 +90,8 @@ class Local_Map:
         for i, row in enumerate(range(topY, botY)):
             for j, col in enumerate(range(topX, botX)):
                 robot_id = robot_positions[i, j]
-                if robot_id == 0:
+                # Don't bother if it's either our ID or not an agent
+                if robot_id == 0 or robot_id == self.our_numerical_id + 1:
                     continue
 
                 self._teammate_locations[robot_id - 1] = (row, col)

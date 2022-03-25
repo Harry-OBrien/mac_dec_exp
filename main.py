@@ -54,11 +54,11 @@ def main():
         "pad_output":False,
         "agent_view_shape":(9, 9),
         "view_offset":4,
-        "screen_size":900
+        "screen_size":500
     }
 
     # Create env
-    env, unwrapped = make_env(**env_config)
+    env = make_env(**env_config)
     env.reset()
     
     # Initialise agents
@@ -71,10 +71,10 @@ def main():
             n_actions=n_actions, 
             observation_dim=observation_space, 
             map_dim=env_config["map_shape"],
-            env=unwrapped,
+            env=env,
             id=agent)
 
-        unwrapped.register_communication_callback(agent, agents[agent].get_callbacks())
+        env.unwrapped.register_communication_callback(agent, agents[agent].get_callbacks())
 
     fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=True)
     env.close()

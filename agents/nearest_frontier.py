@@ -63,7 +63,7 @@ class NearestFrontierAgent(Base_Agent):
         self.last_known_agent_pos = {}
         self.agent_goals = {}
 
-        self.mapping = mapping.Local_Map(map_dim=map_dim, view_dim=observation_dim)
+        self.mapping = mapping.Local_Map(map_dim=map_dim, view_dim=observation_dim, our_numerical_id=self._numerical_id)
         self.goal_extraction = goal_extraction.Goal_Extractor(local_mapper=self.mapping, frontier_width=frontier_width)
         self.current_goal = None
         self.last_goal = None
@@ -112,7 +112,7 @@ class NearestFrontierAgent(Base_Agent):
         # find teammates and share data
         self.teammate_detector.update_observation(observation["robot_positions"])
         if self.teammate_detector.teammate_in_range():
-            self.teammate_detector.get_shared_obs()
+            self.teammate_detector.communicate_with_team()
 
         # Append observation to map
         self.mapping.append_observation(
@@ -130,12 +130,12 @@ class NearestFrontierAgent(Base_Agent):
         # print("this move:", moves[next_move])
         return next_move
 
-    def _select_next_move(self, teammate_in_range):
+    def _select_next_move(self):
         # we need to check this every time because there is a change that another agent
         # was blocking our path and this has now changed
         mac_dec_selection_success = True
         # If we need to select a new goal location
-        if self.navigator.reached_goal() or teammate_in_range:
+        if self.navigator.reached_goal() or self.teammate_detector.teammate_in_range():
             mac_dec_selection_success = self._select_new_macro_action()
 
         if mac_dec_selection_success:

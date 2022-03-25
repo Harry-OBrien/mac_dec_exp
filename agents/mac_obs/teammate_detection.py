@@ -7,7 +7,7 @@ class Teammate_Detector:
     def __init__(self, env, our_id):
         self._env = env
         self._our_id = our_id
-        self._numerical_id = int(our_id[-1])    # We're assuming that our string id is in the form '*[number]', e.g. 'agent_0'
+        self._our_numerical_id = int(our_id[-1])    # We're assuming that our string id is in the form '*[number]', e.g. 'agent_0'
 
         self._agents_in_range = []
         self._found_teammate = False
@@ -57,8 +57,8 @@ class Teammate_Detector:
             for val in row:
                 # We need a +1 here because the IDs are offset by 1 in the agent map
                 # There's defo a better way of doing this, but it is defo a 'TO-DO' item, yk?
-                if val != 0 and val != self._numerical_id + 1:
-                    agents_ids.append(val)
+                if val != 0 and val != (self._our_numerical_id + 1):
+                    agents_ids.append(val - 1)
 
         self._searched_for_agents = True
 
@@ -66,5 +66,5 @@ class Teammate_Detector:
 
     def communicate_with_team(self):
         for target_id in self._agents_in_range:
-            success = self._env.communicate_with_agent(self._numerical_id, target_id)
+            success = self._env.unwrapped.communicate_with_agent(self._our_numerical_id, target_id)
 
