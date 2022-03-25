@@ -12,12 +12,8 @@ class Navigation_Controller:
 
         self._path_planner = Path_Planner(self._maps.get_shape())
         self._current_goal = None
-        self._current_step = 0
-        self._next_step = 1
 
     def episode_reset(self):
-        self._current_step = 0
-        self._next_step = 1
         self._current_goal = None
 
     def reached_goal(self):
@@ -52,9 +48,14 @@ class Navigation_Controller:
         pos = self._location.get_pos()
         assert pos != None
 
-        # check that we've moved
+        # If we don't have a path, there is no next action to take
+        if self._path == None:
+            print("WARN: Asked for the next move in a path before setting a goal location")
+            return 4
+
+        # check that we've moved since last time
         current_path_pos = self._path.path_get(self._current_step)
-        if pos[0] != current_path_pos[0] and pos[1] != current_path_pos[1]:
+        if pos[0] != current_path_pos[0] or pos[1] != current_path_pos[1]:
             self._current_step = self._next_step
             self._next_step += 1
 
@@ -65,14 +66,10 @@ class Navigation_Controller:
                 self._current_goal = None
                 raise PathNotFoundError()
 
-        # If we don't have a path, there is no next action to take
-        if self._path == None:
-            print("WARN: Asked for the next move before setting a goal location")
-            return 4
 
         # If we're not at our current goal
         if not self.reached_goal():
-            (next_y, next_x) = self._path.path_get(self._current_step)
+            (next_y, next_x) = self._path.path_get(self._next_step)
 
             (y, x) = pos
 
@@ -83,7 +80,7 @@ class Navigation_Controller:
             # in the environment, so just recalculate the path to our goal
             if (delta_x >= 1 and delta_y >= 1) or (delta_x <= -1 and delta_y <= -1):
                 self._calculate_path()
-                (next_y, next_x) = self._path.path_get(self._current_step)
+                (next_y, next_x) = self._path.path_get(self._next_step)
                 delta_x = next_x - x
                 delta_y = next_y - y
 
@@ -136,6 +133,7 @@ class Navigation_Controller:
         if self._path == None:
             raise PathNotFoundError()
         
+        self._current_step = 0
         self._next_step = 1
 
         

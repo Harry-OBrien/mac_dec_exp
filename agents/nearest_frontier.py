@@ -244,7 +244,7 @@ class NearestFrontierAgent(Base_Agent):
     def data_tx_callback(self):
         output_data = {
             "agent_id":self._numerical_id,
-            "last_goal":self.last_goal if self.last_goal is None else self.current_goal,
+            "last_goal":self.last_goal if self.last_goal is not None else self.current_goal,
             "current_goal":self.current_goal,
             # "position":self.localiser.get_state()[0],
             "maps":self.mapping.get_maps()

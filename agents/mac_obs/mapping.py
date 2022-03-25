@@ -121,4 +121,4 @@ class Local_Map:
         self._teammate_last_goals[teammate_id] = last_goal
 
         # current goal
-        self._teammate_last_goals[teammate_id] = current_goal
+        self._teammate_current_goals[teammate_id] = current_goal

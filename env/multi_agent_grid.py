@@ -690,9 +690,10 @@ class raw_env(AECEnv):
             print("WARN: Agent thought it could see an agent which it cannot.")
             return False
 
-        # Slight chance of communication failing
-        if self._np_random.random() < self._communication_dropout_prob:
-            return False
+        # Slight chance of communication failing for a duration of 7 time steps
+        if self._teammate_in_sight_count[tx_agent] <= 7:
+            if self._np_random.random() < self._communication_dropout_prob:
+                return False
             
         # callbacks transmit (tx) and reciece (rx)
         if self.comms_callbacks[rx_agent] is None or self.comms_callbacks[tx_agent] is None:

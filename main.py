@@ -42,12 +42,12 @@ def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
 
 def main():
     training_config = {
-        "n_episodes":100
+        "n_episodes":10
     }
 
     env_config = {
         "map_shape":(20, 20),
-        "n_agents":4,
+        "n_agents":3,
         "seed":0,
         # "clutter_density":0.3,
         "max_steps":50,
@@ -76,7 +76,7 @@ def main():
 
         env.unwrapped.register_communication_callback(agent, agents[agent].get_callbacks())
 
-    fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=True)
+    reward_history = fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=True)
     env.close()
 
 if __name__ == "__main__":

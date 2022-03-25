@@ -38,6 +38,7 @@ class path_t:
         assert(i < self.len)
         return self.nodes[i]
         
+        
     def path_len(self):
         return self.len
         
