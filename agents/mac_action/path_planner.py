@@ -24,11 +24,8 @@ class Path_Planner:
         assert start_pos is not None or end_pos is not None
         assert obstacle_map is not None
 
-        # Compute the heuristics for the current goal position
-        h = self._calc_heuristic(end_pos, obstacle_map)
-
         # perform an a* path finding search
-        result = self.a_star_search(obstacle_map, start_pos, end_pos, h)
+        result = self.a_star_search(obstacle_map, start_pos, end_pos)
 
         return result
 
@@ -48,35 +45,25 @@ class Path_Planner:
 
         return np.sqrt(a**2 + b**2)
 
-    def _calc_heuristic(self, end_pos, occupation_map):
+    def _calculate_heuristic(self, point, goal, occupation_map):
         """
         Calculates the heuristic value for all points in the map and the end position
 
         # Arguments
-            end_pos: tuple (int, int)
+            point: tuple (int, int) - start point
+            goal: tuple (int, int)
             occupation_map: Array<Array<Int>>
 
         # Returns
             heuristic map: Array<Array<Int>>
         """
-        assert(end_pos != None)
+        assert(goal != None)
         assert(occupation_map is not None)
 
-        heuristic_map = []
-        for i, row in enumerate(occupation_map):
-            heurist_row = []
-            for j, occupied in enumerate(row):
-                if occupied:
-                    heurist_row.append(weight.weight_inf())
-                else:
-                    heurist_row.append(weight.weight_t(self.get_distance((i, j), end_pos)))
-
-            heuristic_map.append(heurist_row)
-
-        assert(len(heuristic_map) == self._map_height)
-        assert(len(heuristic_map[0]) == self._map_width)
-
-        return np.array(heuristic_map)
+        if occupation_map[point] == 1:
+            return weight.weight_inf()
+        else:
+            return weight.weight_t(self.get_distance(point, goal))
 
     def _get_neighbouring_nodes(self, u, occupancy_map):
         """
@@ -112,7 +99,7 @@ class Path_Planner:
 
         return (np.int(row), np.int(col))
 
-    def a_star_search(self, occupancy_map, src, dst, h):
+    def a_star_search(self, occupancy_map, src, dst):
         """
         Finds a path between src and dst using a* search.
 
@@ -120,11 +107,13 @@ class Path_Planner:
             occupancy_map - a map of occupied positions in the world: Array<Array<Int>>
             src - starting location: (Int, Int)
             dst - starting location: (Int, Int)
-            h - 2D array listing the heuristic values for every node to the dst node: Array<Array<Int>>
-
+            
         # Returns
             either a path from src to dst or None if no path can be found.
         """
+        # 2D array listing the heuristic values for every node to the dst node: Array<Array<Int>>
+        h = np.full(occupancy_map.shape, None)
+
         # Create a priority queue
         pq = DPQ_t(self._num_nodes)
 
@@ -157,6 +146,10 @@ class Path_Planner:
                 new_weight = weight.weight_add(dist[u], weight.weight_one())
                 if (weight.weight_less(new_weight, dist[v])):
                     dist[v] = new_weight
+
+                    # If we haven't previously calculated the heuristic value for this cell, do so
+                    if h[v] is None:
+                        h[v] = self._calculate_heuristic(v, dst, occupancy_map)
 
                     assert(h[v].weight_is_finite())
                     priority = weight.weight_add(new_weight, h[v])

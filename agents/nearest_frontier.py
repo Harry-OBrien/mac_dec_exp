@@ -71,7 +71,7 @@ class NearestFrontierAgent(Base_Agent):
         self.navigator = low_level_controller.Navigation_Controller(self.mapping, self.localiser, self.teammate_detector)
 
     def reset_observations(self):
-        print("resetting agent!")
+        # print("resetting agent!")
         self.mapping.reset_maps()
         self.localiser.update_location(None)
         self.navigator.episode_reset()
@@ -85,7 +85,7 @@ class NearestFrontierAgent(Base_Agent):
         pass
 
     # forward pass through network
-    def get_action(self, observation):
+    def get_action(self, observation, done):
         """
         Gets the agents desired action from a given observation
 
@@ -102,6 +102,11 @@ class NearestFrontierAgent(Base_Agent):
         returns
             action in range 0 -> n_actions - 1
         """
+        if done:
+            # TODO: save macro action
+
+            return None
+
         # If we have no observation, we can't really do much...
         if observation is None:
             return NO_ACTION

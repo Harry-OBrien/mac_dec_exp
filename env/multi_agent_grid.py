@@ -66,7 +66,7 @@ def make_env(map_shape, n_agents, **kwargs):
 class raw_env(AECEnv):
     metadata = {'render_modes': ['human'], "name": "multi_agent_grid_world_v1"}
 
-    def __init__(self, map_shape, n_agents, clutter_density=None, movement_failure_prob=0.0, communication_dropout_prob=0.0, 
+    def __init__(self, map_shape, n_agents, clutter_density=None, movement_failure_prob=0.1, partial_observation_prob=0.1, communication_dropout_prob=0.0, 
                  step_penalty=-1, decay_reward=False, max_steps=250, agent_view_shape=(5,5), view_offset=0, seed=None, transparent_walls=False,
                  overlay_maps=True, pad_output=True, screen_size = 500):
         """
@@ -80,6 +80,7 @@ class raw_env(AECEnv):
         self._n_agents = n_agents
         self._clutter_density = clutter_density
         self._movement_failure_prob = movement_failure_prob
+        self._partial_observation_prob = partial_observation_prob
         self._communication_dropout_prob = communication_dropout_prob
         self._step_penalty = step_penalty
         self._decay_reward = decay_reward
@@ -268,7 +269,7 @@ class raw_env(AECEnv):
         # print(agent, action)
 
         # Slight chance of robot not doing as expected
-        if self._np_random.uniform() < self._movement_failure_prob: 
+        if action != 4 and self._np_random.uniform() < self._movement_failure_prob: 
             action = self._random_move(agent)
 
         current_location = self._agent_locations[agent]
@@ -288,12 +289,12 @@ class raw_env(AECEnv):
             return
 
         # if not blocked, move agent
-        if not self._maps["obstacles"][next_pos] and\
-            not self._maps["robot_positions"][next_pos]:
+        if self._maps["obstacles"][next_pos] == 0 and\
+            self._maps["robot_positions"][next_pos] == 0:
             self._agent_locations[agent] = next_pos
 
     def _random_move(self, agent):
-        # We do -1 here because the 
+        # random action between (0 -> n-1)
         return self._np_random.choice(self.action_space(agent).n - 1)
 
     def _point_out_of_bounds(self, pos):
@@ -326,6 +327,12 @@ class raw_env(AECEnv):
         mask = np.ones_like(observation["obstacles"], dtype=bool)
         if not self._transparent_walls:
             mask = self._occlude_mask(~observation["obstacles"].astype(bool), pos_in_obs)
+
+        # Slight chance that the agent doesn't observe a cell
+        for i, row in enumerate(mask):
+            for j, _ in enumerate(row):
+                if self._np_random.uniform() < self._partial_observation_prob:
+                    mask[i, j] = False
 
         for key, obs_map in observation.items():
             for i, row in enumerate(obs_map):

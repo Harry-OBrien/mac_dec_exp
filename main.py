@@ -1,4 +1,5 @@
 # from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
+import json
 from agents.nearest_frontier import NearestFrontierAgent
 from env.multi_agent_grid import make_env
 # from keras.callbacks import History
@@ -7,11 +8,12 @@ from env.multi_agent_grid import make_env
 
 def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
 
-    rewards={agent: [] for agent in env.agents}
+    rewards = {agent: [] for agent in env.agents}
 
     # Start training
-    for _ in range(nb_episodes):
+    for ep_idx in range(nb_episodes):
         env.reset()
+        print("Starting episode", ep_idx + 1)
        
         episode_rewards={agent: 0 for agent in env.agents}
         episode_rewards["global"] = 0
@@ -21,7 +23,7 @@ def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
             state, reward, done, _ = env.last()
 
             # TODO: IF we are done, we should probs let the agent know about this so it can save the macro action to replay mem
-            action = None if done else agent.get_action(state)
+            action = agent.get_action(state, done)
             env.step(action)
 
             agent.append_to_mem(state, action, reward, done)
@@ -42,13 +44,13 @@ def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
 
 def main():
     training_config = {
-        "n_episodes":10
+        "n_episodes":5
     }
 
     env_config = {
         "map_shape":(20, 20),
         "n_agents":3,
-        "seed":0,
+        # "seed":0,
         # "clutter_density":0.3,
         "max_steps":50,
         "pad_output":False,
@@ -76,8 +78,12 @@ def main():
 
         env.unwrapped.register_communication_callback(agent, agents[agent].get_callbacks())
 
-    reward_history = fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=True)
+    reward_history = fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=False)
     env.close()
+
+    print(reward_history)
+    with open("./reward_log.json", 'w') as reward_file:
+        reward_file.write(json.dumps(reward_history))
 
 if __name__ == "__main__":
     main()
