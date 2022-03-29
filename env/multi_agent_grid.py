@@ -4,6 +4,7 @@ from pettingzoo import ParallelEnv
 from pettingzoo.utils import wrappers
 from pettingzoo.utils import parallel_to_aec
 from gym.utils import seeding
+import numpy as np
 
 from .world import MultiAgentWorld
 from .rendering import Renderer
@@ -37,8 +38,8 @@ class parallel_env(ParallelEnv):
         self._agent_view_shape = agent_view_shape
         self._pad_output = pad_output
 
-        self.possible_agents = ["agent" + str(r) for r in range(n_agents)]
-        self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
+        self.possible_agents = ["agent_" + str(r) for r in range(n_agents)]
+        self.agent_name_mapping = dict(zip(self.possible_agents, list(range(1, len(self.possible_agents) + 1))))
 
         self.seed(seed)
 
@@ -86,15 +87,7 @@ class parallel_env(ParallelEnv):
     def capture_episode(self, *args):
         self._environment_log.capture_episode(*args)
 
-    def close(self):
-        '''
-        Close should release any graphical displays, subprocesses, network connections
-        or any other environment data which should not be kept around after the
-        user is no longer using the environment.
-        '''
-        self._environment_log.close()
-        self._renderer.close()
-
+    # MARK: Reset
     def reset(self):
         '''
         Resets the environment to a starting state.
@@ -119,20 +112,27 @@ class parallel_env(ParallelEnv):
         self.infos = {agent: {} for agent in self.agents}
         self.num_steps = 0
 
+        self._teammate_in_sight_count = {agent:0 for agent in self.agents}
         self.communications_this_step = {agent:[] for agent in self.agents}
+        self._local_interaction_count = 0
 
         self._world.reset()
         self._environment_log.episode_reset()
 
         observations = {}
+        self._last_masks = {}
 
         if self._global_view:
             observations = self._world.maps
         else:
-            observations = {agent: self._observation_for_agent(agent) for agent in self.agents}
+            for agent in self.agents:
+                initial_observation, _, _, _, initial_mask = self._observation_for_agent(agent)
+                observations[agent] = initial_observation
+                self._last_masks[agent] = initial_mask
 
         return observations
 
+    # MARK: Step
     def step(self, actions):
         '''
         step(action) takes in an action for each agent and should return the
@@ -147,84 +147,193 @@ class parallel_env(ParallelEnv):
 
         # Perform actions for agents
         distance_travelled = 0
+        actions_taken = {}
         for agent, action in actions.items():
-            distance_travelled += self._perform_action(agent, action)
+            actions_taken[agent] = self._perform_action(agent, action)
+            if actions_taken[agent] != Action.NO_MOVEMENT:
+                distance_travelled += 1
 
         # current observation is just the other player's most recent action
+        # if self._global_view:
+        #     observations = self._world.maps
+        # else:
+        #     observations = {agent: self._observation_for_agent(agent) for agent in self.agents}
+        observations = {}
+        rewards = {}
+        for agent in self.agents:
+            agent_observation, raw_observation, _, _, this_mask = self._observation_for_agent(agent)
+            observations[agent] = agent_observation
+
+            reward = self._calculate_reward(agent,
+                                            this_mask,
+                                            self._last_masks[agent],
+                                            raw_observation,
+                                            actions_taken[agent])
+
+            rewards[agent] = reward
+            self._last_masks[agent] = this_mask
+
         if self._global_view:
             observations = self._world.maps
-        else:
-            observations = {agent: self._observation_for_agent(agent) for agent in self.agents}
 
-        # Calculate rewards
-        if self._global_view:
-            rewards = self._world.calculate_reward("global")
-        else:
-            rewards = {agent:self._world.calculate_reward(agent) for agent in self.agents}
+            rewards = sum(rewards.values())
+            rewards -= 1
+            if self._world.search_fully_complete():
+                rewards += 100
 
         # typically there won't be any information in the infos, but there must
         # still be an entry for each agent
         infos = {agent: {} for agent in self.agents}
 
-        env_done = self.num_steps >= self._max_steps or self._world.search_complete
-        dones = {agent: env_done for agent in self.agents}
+        dones = {}
+        env_done = self.num_steps >= self._max_steps or self._world.search_fully_complete()
+        for agent in self.agents:
+            try:
+                if dones[agent]:
+                    continue
+            except KeyError:
+                pass
+            
+            dones[agent] =  env_done or self._world.agent_complete(agent)
 
-        if env_done:
+        if env_done or self._all_complete(dones):
             self.agents = []
 
         # logging etc
-        self.num_steps += 1
-        self._world.on_step_complete()
         self._environment_log.capture_step(
             reward=sum(list(rewards.values())), 
             explored_count=self._world.nb_cells_explored,
             map_size=self._world.map_size,
             distance_travelled=distance_travelled,
-            local_interactions=0)
+            local_interactions=self._local_interaction_count)
+        self.num_steps += 1
 
         return observations, rewards, dones, infos
 
-    # MARK: Private functions
-    # MARK: Actions
+    def _all_complete(self, dones):
+        for done in dones.values():
+            if not done:
+                return False
+
+        return True
+
+    # MARK: Action
     def _perform_action(self, agent, action):
         if action == Action.NO_MOVEMENT:
-            return 0
+            return action
 
         # Slight chance that we'll move to a random cell instead of the desired
         if self._np_random.uniform() < self._movement_failure_prob:
             action = self._random_action()
 
         movement = [(-1, 0), (0, 1), (1, 0), (0, -1)][action.value]
-        distance_travelled = self._world.move(agent, movement)
+        _ = self._world.move(agent, movement)
 
-        return distance_travelled
+        return action
 
     def _random_action(self):
         # We do -1 here because we don't want to include NO_MOVEMENT
         action = self._np_random.choice(self.action_space().n - 1)
         return Action(action)
 
-    # MARK: Observations
+    # MARK: Observation
     def _observation_for_agent(self, agent):
-        observation, bounds, offsets, occlusion_mask = self._world.observation_for_agent(agent)
+        raw_observation, bounds, offsets, occlusion_mask = self._world.observation_for_agent(agent)
 
         if self._pad_output:
-            return {
-                "obstacles":pad_array(observation["obstacles"], 1, *offsets),
-                "robot_positions":pad_array(observation["robot_positions"], 0, *offsets),
+            agent_observation = {
+                "obstacles":pad_array(raw_observation["obstacles"], 1, *offsets),
+                "robot_positions":pad_array(raw_observation["robot_positions"], 0, *offsets),
                 "explored_space":pad_array(occlusion_mask, 0, *offsets),
                 "bounds":bounds,
                 "pos":self._world.agent_location(agent),
             }
         else:
-            return {
-                "obstacles":observation["obstacles"],
-                "robot_positions":observation["robot_positions"],
+            agent_observation = {
+                "obstacles":raw_observation["obstacles"],
+                "robot_positions":raw_observation["robot_positions"],
                 "explored_space":occlusion_mask,
                 "bounds":bounds,
                 "pos":self._world.agent_location(agent),
             }
 
+        return agent_observation, raw_observation, bounds, offsets, occlusion_mask
+
+    # MARK: Reward
+    def _calculate_reward(self, agent, this_mask, last_mask, raw_observation, action):
+        reward = 0
+        pos_expl_reward, neg_expl_reward, new_cell_mask = self._count_new_cells(this_mask, 
+                                                                    last_mask, 
+                                                                    raw_observation["explored_space"],
+                                                                    action)
+
+        # print(pos_expl_reward, neg_expl_reward, new_cell_mask.astype(int), sep="\n")
+
+        reward += pos_expl_reward
+        reward -= neg_expl_reward
+
+        if self._teammate_in_observation(self.agent_name_mapping[agent], raw_observation["robot_positions"]):
+            self._teammate_in_sight_count[agent] += 1
+        else:
+            self._teammate_in_sight_count[agent] = 0            
+
+        # if not self._global_view:
+        #     sight_count =  self._teammate_in_sight_count[agent]
+        #     if sight_count >= 2 and sight_count <= 7:
+        #         reward -= np.sqrt(np.exp(sight_count)/5)
+        #     elif sight_count > 7:
+        #         reward -= 15
+
+        return reward
+
+    def _count_new_cells(self, this_mask, last_mask, observation, action):
+        axis = 0 if (action == Action.UP or action == Action.DOWN) else 1
+
+        mask_shape_diff = this_mask.shape[axis] - last_mask.shape[axis]
+        offset = [(-1, 0), (0, 1), (1, 0), (0, -1), (0, 0)][action.value][axis]
+
+        shifted_mask = self._generate_shifted_mask(last_mask, mask_shape_diff, offset, axis)
+        new_cell_mask = ~shifted_mask & this_mask
+
+        # Calculate reward values
+        new_cells = np.count_nonzero(new_cell_mask)
+        prev_observed_cells = np.count_nonzero(observation & new_cell_mask)
+    
+        positive_reward, negative_reward = new_cells - prev_observed_cells, prev_observed_cells
+        return positive_reward, negative_reward, new_cell_mask
+
+    def _generate_shifted_mask(self, last_mask, size_diff, offset, axis):
+        assert offset >= -1 and offset <= 1
+        
+        shifted_slice = last_mask
+        
+        if offset == -1:  
+            if size_diff <= 0:
+                bot_y = -1 if axis == 0 else None
+                bot_x = -1 if axis == 1 else None
+                shifted_slice = shifted_slice[:bot_y, :bot_x]
+                
+            if size_diff >= 0:
+                shifted_slice = np.insert(shifted_slice, 0, 0, axis=axis)
+
+        elif offset == 1:
+            if size_diff <= 0:
+                top_y = 1 if axis == 0 else None
+                top_x = 1 if axis == 1 else None
+                shifted_slice = shifted_slice[top_y:, top_x:]
+                
+            if size_diff >= 0:
+                shifted_slice = np.insert(shifted_slice, shifted_slice.shape[axis], 0, axis=axis)
+                
+        return shifted_slice
+
+    def _teammate_in_observation(self, this_agent_id, robot_positions_observation):
+        for row in robot_positions_observation:
+            for teammate in row:
+                if teammate and teammate != this_agent_id:
+                    return True
+
+        return False
 
     # MARK: Communication
     def register_communication_callback(self, agent_id, callback):
@@ -270,12 +379,14 @@ class parallel_env(ParallelEnv):
         if rx_agent not in self.communications_this_step[tx_agent]:
             self.communications_this_step[tx_agent].append(rx_agent)
             self.communications_this_step[rx_agent].append(tx_agent)
-            self.local_interaction_count += 1
+            self._local_interaction_count += 1
 
         # Slight chance of communication failing for a duration of 7 time steps
         if self._teammate_in_sight_count[tx_agent] <= 7:
             if self._np_random.random() < self._communication_dropout_prob:
                 return False
+
+        self._world.combine_maps(tx_agent, rx_agent)
             
         # callbacks transmit (tx) and reciece (rx)
         if self.comms_callbacks[rx_agent] is None or self.comms_callbacks[tx_agent] is None:
@@ -289,3 +400,13 @@ class parallel_env(ParallelEnv):
         sender_cb_rx(target_cb_tx())
 
         return True
+
+    # MARK: Close
+    def close(self):
+        '''
+        Close should release any graphical displays, subprocesses, network connections
+        or any other environment data which should not be kept around after the
+        user is no longer using the environment.
+        '''
+        self._environment_log.close()
+        self._renderer.close()

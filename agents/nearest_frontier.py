@@ -4,6 +4,10 @@ from .base import Base_Agent
 from .mac_action import low_level_controller
 from .mac_obs import goal_extraction, localisation, mapping, teammate_detection
 
+import sys
+sys.path.append("../env")
+from env.actions import Action
+
 # from tensorflow.keras.optimizers import Adam
 # from tensorflow.keras.models import Model
 # from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, LeakyReLU, Input, concatenate
@@ -12,13 +16,6 @@ from .mac_obs import goal_extraction, localisation, mapping, teammate_detection
 
 import numpy as np
 
-import sys
-
-UP = 0
-RIGHT = 1
-DOWN = 2
-LEFT = 3
-NO_ACTION = 4
 
 # TODO: Remove AI stuff and anything not related to JUST nearest frontier
 class NearestFrontierAgent(Base_Agent):
@@ -76,6 +73,13 @@ class NearestFrontierAgent(Base_Agent):
         self.localiser.update_location(None)
         self.navigator.episode_reset()
 
+        self.prev_agent_goals = {}
+        self.last_known_agent_pos = {}
+        self.agent_goals = {}
+
+        self.current_goal = None
+        self.last_goal = None
+
     def target_update(self):
         pass
 
@@ -85,7 +89,7 @@ class NearestFrontierAgent(Base_Agent):
         pass
 
     # forward pass through network
-    def get_action(self, observation, done):
+    def get_action(self, observation):
         """
         Gets the agents desired action from a given observation
 
@@ -102,14 +106,9 @@ class NearestFrontierAgent(Base_Agent):
         returns
             action in range 0 -> n_actions - 1
         """
-        if done:
-            # TODO: save macro action
-
-            return None
-
         # If we have no observation, we can't really do much...
         if observation is None:
-            return NO_ACTION
+            return Action.NO_MOVEMENT
 
         # Update location
         self.localiser.update_location(observation["pos"])
@@ -145,13 +144,13 @@ class NearestFrontierAgent(Base_Agent):
 
         if mac_dec_selection_success:
             try:
-                return self.navigator.next_move()
+                return Action(self.navigator.next_move())
             except low_level_controller.PathNotFoundError:
-                return NO_ACTION
+                return Action.NO_MOVEMENT
         else:
             # Explored everything we can.
-            # TODO: Stay in this state
-            return NO_ACTION # No move
+            # TODO: Stay in this state until we have another interaction with an agent
+            return Action.NO_MOVEMENT
 
     def _select_new_macro_action(self):
 

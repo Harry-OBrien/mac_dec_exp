@@ -1,71 +1,72 @@
 # from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
-import json
 from agents.nearest_frontier import NearestFrontierAgent
-from env.multi_agent_grid import make_env
-# from keras.callbacks import History
-# from rl.callbacks import CallbackList
-# import numpy as np
+# import env as multi_agent_grid
+from env.actions import Action
+from env.multi_agent_grid import parallel_env
 
-def fit(env, agents, nb_episodes, callbacks=[], visualise=False):
+def all_complete(done_dict):
+    for complete in done_dict.values():
+        if not complete:
+            return False
 
-    rewards = {agent: [] for agent in env.agents}
+    return True
+
+def fit(env, agents, nb_episodes, visualise=False):
+
+    from pettingzoo.utils import average_total_reward
+    # average_total_reward(env, max_episodes=10, max_steps=75)
+
 
     # Start training
-    for ep_idx in range(nb_episodes):
-        env.reset()
+    for ep_idx in range(nb_episodes):            
+            
+        states = env.reset()
+        env.render()
+
         print("Starting episode", ep_idx + 1)
-       
-        episode_rewards={agent: 0 for agent in env.agents}
-        episode_rewards["global"] = 0
+        dones = {agent: False for agent in agents.keys()}
+        
+        while not all_complete(dones):
+            actions = {agent_id: agent.get_action(states[agent_id]) for agent_id, agent in agents.items()}
+            states, rewards, dones, _ = env.step(actions)
 
-        for i, agent_id in enumerate(env.agent_iter()):
-            agent = agents[agent_id]
-            state, reward, done, _ = env.last()
+            for agent_id, agent in agents.items():
+                agent.append_to_mem(states[agent_id], actions[agent_id], rewards[agent_id], dones[agent_id])
 
-            # TODO: IF we are done, we should probs let the agent know about this so it can save the macro action to replay mem
-            action = agent.get_action(state, done)
-            env.step(action)
+            env.render()
 
-            agent.append_to_mem(state, action, reward, done)
-
-            episode_rewards[agent_id] += reward
-            episode_rewards["global"] += reward
-
-            if visualise and i % len(agents) == 0:
-                env.render()
-
+        # allow the agents to train
         for agent in agents.values():
             agent.replay()
             agent.target_update()
-            rewards[agent_id].append(episode_rewards[agent_id])
             agent.reset_observations()
 
-    return rewards
+        # Finally, log all the data from the episode
+        env.unwrapped.capture_episode(ep_idx, ep_idx == nb_episodes - 1)
 
 def main():
     training_config = {
-        "n_episodes":5
+        "n_episodes":10
     }
 
     env_config = {
         "map_shape":(20, 20),
         "n_agents":3,
-        # "seed":0,
-        # "clutter_density":0.3,
-        "max_steps":50,
+        "seed":0,
+        # "clutter_density":0.8,
+        "max_steps":75,
         "pad_output":False,
         "agent_view_shape":(9, 9),
-        "view_offset":4,
-        "screen_size":500
+        "screen_size":500,
+        "logfile_dir":"./agent_training_history.json"
     }
 
     # Create env
-    env = make_env(**env_config)
-    env.reset()
+    env = parallel_env(**env_config)
     
     # Initialise agents
     agents = {}
-    for agent in env.agents:
+    for agent in env.possible_agents:
         observation_space = env.observation_space(agent).shape
         n_actions = env.action_space(agent).n
 
@@ -78,12 +79,8 @@ def main():
 
         env.unwrapped.register_communication_callback(agent, agents[agent].get_callbacks())
 
-    reward_history = fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=False)
+    fit(env, agents, nb_episodes=training_config["n_episodes"], visualise=True)
     env.close()
-
-    print(reward_history)
-    with open("./reward_log.json", 'w') as reward_file:
-        reward_file.write(json.dumps(reward_history))
 
 if __name__ == "__main__":
     main()

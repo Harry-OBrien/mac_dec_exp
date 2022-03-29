@@ -147,7 +147,7 @@ class Mac_Dec_DDQN_Agent(Base_Agent):
 
     # Backwards pass through network to update weights
     def replay(self):
-        return
+        # return
         # Only start training if we have enough samples saved
         if self.memory.nb_elements < self.min_mem_size:
             return

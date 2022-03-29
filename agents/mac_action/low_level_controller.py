@@ -1,8 +1,15 @@
 from .path_planner import Path_Planner
+# from ...env.actions import Action
 
 class PathNotFoundError(Exception):
     """Raised when no path can be found to the given target"""
     pass
+
+UP = 0
+RIGHT = 1
+DOWN = 2
+LEFT = 3
+NO_ACTION = 4
 
 class Navigation_Controller:
     def __init__(self, mapping, localiser, teammate_detector):
@@ -20,7 +27,7 @@ class Navigation_Controller:
         pos = self._location.get_pos()
 
         return self._current_goal is None or \
-            (self._current_goal[0] == pos[0] and self._current_goal[1] == pos[1])
+            self._same_location(pos, self._current_goal)
 
     def set_goal(self, new_goal):
         """
@@ -29,13 +36,17 @@ class Navigation_Controller:
         # Arguments:
             goal_pos: Tuple (Int, Int)
         """
-        if self._current_goal is None or self._current_goal[0] != new_goal[0] or self._current_goal[1] != new_goal[1]:
+        # if not set or is different
+        if self._current_goal is None or not self._same_location(self._current_goal, new_goal):
             self._current_goal = new_goal
         try:
             self._calculate_path()
         except PathNotFoundError:
             self._current_goal = None
             raise PathNotFoundError()
+        
+    def _same_location(self, point_1, point_2):
+        return point_1[0] == point_2[0] and point_1[1] == point_2[1]
 
     def next_move(self):
         """
@@ -51,11 +62,14 @@ class Navigation_Controller:
         # If we don't have a path, there is no next action to take
         if self._path == None:
             print("WARN: Asked for the next move in a path before setting a goal location")
-            return 4
+            return NO_ACTION
+
+        if self._path.path_len() == 1:
+            return NO_ACTION
 
         # check that we've moved since last time
-        current_path_pos = self._path.path_get(self._current_step)
-        if pos[0] != current_path_pos[0] or pos[1] != current_path_pos[1]:
+        target_path_pos = self._path.path_get(self._next_step)
+        if self._same_location(pos, target_path_pos):
             self._current_step = self._next_step
             self._next_step += 1
 
@@ -86,13 +100,6 @@ class Navigation_Controller:
 
             assert delta_x != delta_y   # no diagonals and no '0' moves
 
-            # change in y
-            UP = 0
-            RIGHT = 1
-            DOWN = 2
-            LEFT = 3
-            NO_ACTION = 4
-
             move = NO_ACTION
 
             if delta_x < 0:
@@ -109,7 +116,7 @@ class Navigation_Controller:
             return move
         else:
             print("WARN: somehow we've reached the goal but you're still asking for the next move???")
-            return 4
+            return NO_ACTION
 
     def _path_is_legal(self):
         # if any node on our path is occupied, the path is not legal
