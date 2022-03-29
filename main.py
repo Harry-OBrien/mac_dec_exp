@@ -1,7 +1,5 @@
-# from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
-from agents.nearest_frontier import NearestFrontierAgent
-# import env as multi_agent_grid
-from env.actions import Action
+from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
+# from agents.nearest_frontier import NearestFrontierAgent
 from env.multi_agent_grid import parallel_env
 
 def all_complete(done_dict):
@@ -12,11 +10,6 @@ def all_complete(done_dict):
     return True
 
 def fit(env, agents, nb_episodes, visualise=False):
-
-    from pettingzoo.utils import average_total_reward
-    # average_total_reward(env, max_episodes=10, max_steps=75)
-
-
     # Start training
     for ep_idx in range(nb_episodes):            
             
