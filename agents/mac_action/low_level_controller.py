@@ -18,6 +18,7 @@ class Navigation_Controller:
         self._teammate_detector = teammate_detector
 
         self._path_planner = Path_Planner(self._maps.get_shape())
+        self._path = None
         self._current_goal = None
 
     def episode_reset(self):
@@ -25,9 +26,18 @@ class Navigation_Controller:
 
     def reached_goal(self):
         pos = self._location.get_pos()
+        goal_reached = self._current_goal is None or self._same_location(pos, self._current_goal)
 
-        return self._current_goal is None or \
-            self._same_location(pos, self._current_goal)
+        # if not at goal, check if the path is still legal
+        if not goal_reached and not self._path_is_legal():
+            try:
+                # try and recalculate path if we're stuck
+                self._calculate_path()
+            except PathNotFoundError:
+                # Not able to reach goal
+                return True
+
+        return goal_reached
 
     def set_goal(self, new_goal):
         """
@@ -69,17 +79,15 @@ class Navigation_Controller:
 
         # check that we've moved since last time
         target_path_pos = self._path.path_get(self._next_step)
-        if self._same_location(pos, target_path_pos):
+        if self._same_location(pos, target_path_pos) and self._path_is_legal():
             self._current_step = self._next_step
             self._next_step += 1
-
-        if not self._path_is_legal():
+        else:
             try:
                 self._calculate_path()
             except PathNotFoundError:
                 self._current_goal = None
                 raise PathNotFoundError()
-
 
         # If we're not at our current goal
         if not self.reached_goal():

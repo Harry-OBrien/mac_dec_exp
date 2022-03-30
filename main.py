@@ -1,4 +1,4 @@
-from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
+from agents.mac_dec_ddqn import MacDecDDQNAgent
 # from agents.nearest_frontier import NearestFrontierAgent
 from env.multi_agent_grid import parallel_env
 
@@ -18,9 +18,12 @@ def fit(env, agents, nb_episodes, visualise=False):
 
         print("Starting episode", ep_idx + 1)
         dones = {agent: False for agent in agents.keys()}
-        
+
+        i = 0
         while not all_complete(dones):
-            actions = {agent_id: agent.get_action(states[agent_id]) for agent_id, agent in agents.items()}
+            i += 1
+            actions = {agent_id: agent.get_action(states[agent_id], dones[agent_id]) for agent_id, agent in agents.items()}
+            print(i, actions)
             states, rewards, dones, _ = env.step(actions)
 
             for agent_id, agent in agents.items():
@@ -39,7 +42,7 @@ def fit(env, agents, nb_episodes, visualise=False):
 
 def main():
     training_config = {
-        "n_episodes":10
+        "n_episodes":100
     }
 
     env_config = {
@@ -51,7 +54,7 @@ def main():
         "pad_output":False,
         "agent_view_shape":(9, 9),
         "screen_size":500,
-        "logfile_dir":"./agent_training_history.json"
+        "logfile_dir":"./ddqn_history.json"
     }
 
     # Create env
@@ -63,7 +66,7 @@ def main():
         observation_space = env.observation_space(agent).shape
         n_actions = env.action_space(agent).n
 
-        agents[agent] = NearestFrontierAgent(
+        agents[agent] = MacDecDDQNAgent(
             n_actions=n_actions, 
             observation_dim=observation_space, 
             map_dim=env_config["map_shape"],

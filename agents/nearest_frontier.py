@@ -8,14 +8,7 @@ import sys
 sys.path.append("../env")
 from env.actions import Action
 
-# from tensorflow.keras.optimizers import Adam
-# from tensorflow.keras.models import Model
-# from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, LeakyReLU, Input, concatenate
-
-# from rl.policy import MaxBoltzmannQPolicy
-
 import numpy as np
-
 
 # TODO: Remove AI stuff and anything not related to JUST nearest frontier
 class NearestFrontierAgent(Base_Agent):
@@ -29,12 +22,6 @@ class NearestFrontierAgent(Base_Agent):
         self.n_actions = n_actions
         self.observation_shape = observation_dim
         self.state_space = map_dim
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.min_mem_size = min_mem_size
-
-        self.update_target_every = update_target_every
-        self.target_update_counter = 0
 
         # self.layers.summary()
 
@@ -54,18 +41,12 @@ class NearestFrontierAgent(Base_Agent):
 
         # Macro action/observation stuff
         self.localiser = localisation.Localisation()
-
         self.teammate_detector = teammate_detection.Teammate_Detector(env, self._id)
-        self.prev_agent_goals = {}
-        self.last_known_agent_pos = {}
-        self.agent_goals = {}
-
         self.mapping = mapping.Local_Map(map_dim=map_dim, view_dim=observation_dim, our_numerical_id=self._numerical_id)
         self.goal_extraction = goal_extraction.Goal_Extractor(local_mapper=self.mapping, frontier_width=frontier_width)
-        self.current_goal = None
-        self.last_goal = None
-
         self.navigator = low_level_controller.Navigation_Controller(self.mapping, self.localiser, self.teammate_detector)
+
+        self.reset_observations()
 
     def reset_observations(self):
         # print("resetting agent!")
@@ -79,6 +60,8 @@ class NearestFrontierAgent(Base_Agent):
 
         self.current_goal = None
         self.last_goal = None
+
+        self.mac_dec_selection_success = True
 
     def target_update(self):
         pass
@@ -113,10 +96,8 @@ class NearestFrontierAgent(Base_Agent):
         # Update location
         self.localiser.update_location(observation["pos"])
 
-        # find teammates and share data
+        # update the observation for the teammate detector
         self.teammate_detector.update_observation(observation["robot_positions"])
-        if self.teammate_detector.teammate_in_range():
-            self.teammate_detector.communicate_with_team()
 
         # Append observation to map
         self.mapping.append_observation(
@@ -125,6 +106,10 @@ class NearestFrontierAgent(Base_Agent):
             robot_positions=observation["robot_positions"],
             teammates_in_range=self.teammate_detector.teammate_in_range(),
             observation_bounds=observation["bounds"])
+
+        # find teammates and share data
+        if self.teammate_detector.teammate_in_range():
+            self.teammate_detector.communicate_with_team()
 
         # Get the next move
         next_move = self._select_next_move()
@@ -135,14 +120,12 @@ class NearestFrontierAgent(Base_Agent):
         return next_move
 
     def _select_next_move(self):
-        # we need to check this every time because there is a change that another agent
-        # was blocking our path and this has now changed
-        mac_dec_selection_success = True
-        # If we need to select a new goal location
-        if self.navigator.reached_goal() or self.teammate_detector.teammate_in_range():
-            mac_dec_selection_success = self._select_new_macro_action()
+        if self.mac_dec_selection_success or self.teammate_detector.teammate_in_range() or\
+            (self.mac_dec_selection_success and self.navigator.reached_goal()):
 
-        if mac_dec_selection_success:
+            self.mac_dec_selection_success = self._select_new_macro_action()
+
+        if self.mac_dec_selection_success:
             try:
                 return Action(self.navigator.next_move())
             except low_level_controller.PathNotFoundError:
@@ -227,7 +210,7 @@ class NearestFrontierAgent(Base_Agent):
             "delta":[self.teammate_detector.teammate_in_range()],
             "beta_last_g":teammate_last_goals,
             "beta_this_g":teammate_current_goals,
-            "m":np.stack(conv_maps),
+            "m":np.stack(conv_maps, axis=2),
             "E":[percent_explored],
             "g":self._points_to_map_space(goals).flatten()
         }

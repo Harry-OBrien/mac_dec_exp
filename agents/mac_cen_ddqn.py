@@ -17,12 +17,12 @@ from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, LeakyReLU, 
 from rl.policy import MaxBoltzmannQPolicy
 
 class MacDecDDQNAgent(Base_Agent):
-    def __init__(self, n_actions, observation_dim, map_dim, env, id, update_target_every=1_000, 
+    def __init__(self, n_actions, observation_dim, map_dim, env, ids, update_target_every=1_000, 
                  lr=1e-3, gamma=0.99, mem_size=10_000, batch_size=16, min_mem_size=128,
                  frontier_width=6):
 
         # Environment stuff
-        self._id = id
+        self.ids = ids
         self._numerical_id = int(self._id[-1])
         self.n_actions = n_actions
         self.observation_shape = observation_dim
@@ -37,30 +37,31 @@ class MacDecDDQNAgent(Base_Agent):
 
         # Create model
         self.create_network(self.state_space, self.n_actions).summary()
-        num_goals = 4
+        num_goals_combos = 64
 
         self.model = ActionStateModel(
             state_dim=self.state_space, 
             action_dim=self.n_actions,
-            model = self.create_network(self.state_space, num_goals),
+            model = self.create_network(self.state_space, num_goals_combos),
             policy=MaxBoltzmannQPolicy(),
             optimizer=Adam(learning_rate=lr))
 
         self.target_model = ActionStateModel(
             state_dim=self.state_space, 
             action_dim=self.n_actions,
-            model = self.create_network(self.state_space, num_goals),
+            model = self.create_network(self.state_space, num_goals_combos),
             policy=MaxBoltzmannQPolicy(),
             optimizer=Adam(learning_rate=lr))
 
         self.memory = SequentialMacroMemory(limit=mem_size, window_length=1)
 
+        # TODO: Abstract all the individual agent shite into their own class
         # Macro action/observation stuff
-        self.localiser = localisation.Localisation()
-        self.teammate_detector = teammate_detection.Teammate_Detector(env, self._id)
-        self.mapping = mapping.Local_Map(map_dim=map_dim, view_dim=observation_dim, our_numerical_id=self._numerical_id)
-        self.goal_extraction = goal_extraction.Goal_Extractor(local_mapper=self.mapping, frontier_width=frontier_width)
-        self.navigator = low_level_controller.Navigation_Controller(self.mapping, self.localiser, self.teammate_detector)
+        # self.localiser = localisation.Localisation()
+        # self.teammate_detector = teammate_detection.Teammate_Detector(env, self._id)
+        # self.mapping = mapping.Local_Map(map_dim=map_dim, view_dim=observation_dim, our_numerical_id=self._numerical_id)
+        # self.goal_extraction = goal_extraction.Goal_Extractor(local_mapper=self.mapping, frontier_width=frontier_width)
+        # self.navigator = low_level_controller.Navigation_Controller(self.mapping, self.localiser, self.teammate_detector)
 
         self.reset_observations()
 
@@ -73,7 +74,7 @@ class MacDecDDQNAgent(Base_Agent):
         #   teammate(s) in range (1)
         #   [teammate_info] = {last goals: (20x20), current_goals(20x20)}
         #   percent complete [1]
-        #   [our goals](20x20)
+        #   [our goals](20x20) * 64
 
         map_size = self.state_space[0] * self.state_space[1]
         input_length = map_size + 1 + map_size + map_size + 1 + map_size # equal to 1602 values for a 20x20 map
@@ -104,26 +105,26 @@ class MacDecDDQNAgent(Base_Agent):
         x = Model(inputs=map_input, outputs=x)
 
         # Second branch is a FCL to analyse macro observations
-        y = Dense(64, name="F3")(macro_obs_input)
+        y = Dense(128, name="F3")(macro_obs_input)
         y = LeakyReLU()(y)
         y = Dropout(0.2)(y)
         y = Model(inputs=macro_obs_input, outputs=y)
 
         combined = concatenate([x.output, y.output])
 
-        z = Dense(64,  name="F4")(combined)
+        z = Dense(128,  name="F4")(combined)
         z = LeakyReLU()(z)
 
-        z = Dense(64,  name="F5")(z)
+        z = Dense(128,  name="F5")(z)
         z = LeakyReLU()(z)
 
-        z = Dense(64,  name="F6")(z)
+        z = Dense(128,  name="F6")(z)
         z = LeakyReLU()(z)
 
         model_output = Dense(action_space, activation='linear')(z)
         
         inputs = [map_input, macro_obs_input]
-        return Model(inputs, model_output, name="DEP")
+        return Model(inputs, model_output, name="CEP")
 
     def reset_observations(self):
         # print("resetting agent!")

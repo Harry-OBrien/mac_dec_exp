@@ -277,12 +277,12 @@ class parallel_env(ParallelEnv):
         else:
             self._teammate_in_sight_count[agent] = 0            
 
-        # if not self._global_view:
-        #     sight_count =  self._teammate_in_sight_count[agent]
-        #     if sight_count >= 2 and sight_count <= 7:
-        #         reward -= np.sqrt(np.exp(sight_count)/5)
-        #     elif sight_count > 7:
-        #         reward -= 15
+        if not self._global_view:
+            sight_count =  self._teammate_in_sight_count[agent]
+            if sight_count >= 2 and sight_count <= 7:
+                reward -= np.sqrt(np.exp(sight_count)/5)
+            elif sight_count > 7:
+                reward -= 15
 
         return reward
 

@@ -19,11 +19,7 @@ class ActionStateModel:
     def compile(self, optimizer, metrics=[]):
         self.model.compile(loss='mse', optimizer=optimizer, metrics=metrics)
     
-    def predict(self, state):
-        return self.model.predict(state)
-    
-    def get_action(self, state):
-
+    def predict(self, state, batch_size=1):
         # state = {
         #     "x":pos_arr,
         #     "delta":self.teammate_detector.teammate_in_range(),
@@ -36,11 +32,18 @@ class ActionStateModel:
         # }
 
         map_input = state.pop("m")
+        map_input = map_input.reshape(batch_size, *map_input.shape)
+
         fc_input = np.concatenate(list(state.values()))
-        q_value = self.predict(map_input, fc_input)
+        fc_input = fc_input.reshape(batch_size, *fc_input.shape)
+
+        return self.model.predict([map_input, fc_input])
+    
+    def select_action(self, state):
+        q_value = self.predict(state)
 
         # Q-Boltzmann policy
-        action = self.policy.select_action(q_value)
+        action = self.policy.select_action(q_value[0])
 
         return action
 
