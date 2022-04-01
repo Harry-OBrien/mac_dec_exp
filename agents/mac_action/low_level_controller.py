@@ -1,15 +1,11 @@
 from .path_planner import Path_Planner
-# from ...env.actions import Action
+import sys
+sys.path.append("../../env")
+from env.actions import Action
 
 class PathNotFoundError(Exception):
     """Raised when no path can be found to the given target"""
     pass
-
-UP = 0
-RIGHT = 1
-DOWN = 2
-LEFT = 3
-NO_ACTION = 4
 
 class Navigation_Controller:
     def __init__(self, mapping, localiser, teammate_detector):
@@ -24,20 +20,15 @@ class Navigation_Controller:
     def episode_reset(self):
         self._current_goal = None
 
+    def can_reach_location(self, target):
+        local_maps = self._maps.get_maps()
+        obstacle_map = local_maps["obstacles"] | local_maps["robot_positions"]
+
+        path = self._path_planner.compute_route(self._location.get_pos(), target, obstacle_map)
+        return path is not None
+
     def reached_goal(self):
-        pos = self._location.get_pos()
-        goal_reached = self._current_goal is None or self._same_location(pos, self._current_goal)
-
-        # if not at goal, check if the path is still legal
-        if not goal_reached and not self._path_is_legal():
-            try:
-                # try and recalculate path if we're stuck
-                self._calculate_path()
-            except PathNotFoundError:
-                # Not able to reach goal
-                return True
-
-        return goal_reached
+        return self._current_goal is None or self._same_location(self._location.get_pos(), self._current_goal)
 
     def set_goal(self, new_goal):
         """
@@ -46,13 +37,11 @@ class Navigation_Controller:
         # Arguments:
             goal_pos: Tuple (Int, Int)
         """
-        # if not set or is different
-        if self._current_goal is None or not self._same_location(self._current_goal, new_goal):
-            self._current_goal = new_goal
+        self._current_goal = new_goal
+
         try:
             self._calculate_path()
         except PathNotFoundError:
-            self._current_goal = None
             raise PathNotFoundError()
         
     def _same_location(self, point_1, point_2):
@@ -72,21 +61,20 @@ class Navigation_Controller:
         # If we don't have a path, there is no next action to take
         if self._path == None:
             print("WARN: Asked for the next move in a path before setting a goal location")
-            return NO_ACTION
+            return Action.NO_MOVEMENT
 
         if self._path.path_len() == 1:
-            return NO_ACTION
+            return Action.NO_MOVEMENT
 
         # check that we've moved since last time
         target_path_pos = self._path.path_get(self._next_step)
-        if self._same_location(pos, target_path_pos) and self._path_is_legal():
+        if self._same_location(pos, target_path_pos): # and self._path_is_legal():
             self._current_step = self._next_step
             self._next_step += 1
         else:
             try:
                 self._calculate_path()
             except PathNotFoundError:
-                self._current_goal = None
                 raise PathNotFoundError()
 
         # If we're not at our current goal
@@ -108,23 +96,23 @@ class Navigation_Controller:
 
             assert delta_x != delta_y   # no diagonals and no '0' moves
 
-            move = NO_ACTION
+            move = Action.NO_MOVEMENT
 
             if delta_x < 0:
-                move = LEFT
+                move = Action.LEFT
             elif delta_x > 0:
-                move = RIGHT
+                move = Action.RIGHT
             elif delta_y < 0:
-                move = UP
+                move = Action.UP
             elif delta_y > 0:
-                move = DOWN
+                move = Action.DOWN
             else:
                 assert False # we shouldn't be here due our previous assertion
 
             return move
         else:
             print("WARN: somehow we've reached the goal but you're still asking for the next move???")
-            return NO_ACTION
+            return Action.NO_MOVEMENT
 
     def _path_is_legal(self):
         # if any node on our path is occupied, the path is not legal

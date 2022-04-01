@@ -1,8 +1,8 @@
-from .models.action_state_model import ActionStateModel
-from .base import Base_Agent
+from ..models.action_state_model import ActionStateModel
+from ..base import Base_Agent
 
-from .mac_action import low_level_controller
-from .mac_obs import goal_extraction, localisation, mapping, teammate_detection
+from ..mac_action import low_level_controller
+from ..mac_obs import goal_extraction, localisation, mapping, teammate_detection
 
 import sys
 sys.path.append("../env")

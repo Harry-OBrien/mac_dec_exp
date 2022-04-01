@@ -44,7 +44,7 @@ class Local_Map:
         Gets the agent's local maps
 
         # Returns
-        5 binary feature maps of the explored space, obstacles, observed robot positions, and goal candidates
+        6 binary feature maps of the explored space, obstacles, observed robot positions, our goal candidates and teammates prev and curr goals
         """
         output_maps = self._maps.copy()
 

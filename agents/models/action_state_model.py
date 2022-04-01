@@ -5,12 +5,10 @@ import numpy as np
 #         super.__init__(**kwargs)
 
 class ActionStateModel:
-    def __init__(self, state_dim, action_dim, model, policy, optimizer):
+    def __init__(self, model, policy, optimizer):
         # , gamma, policy, enable_double_dqn, memory, nb_steps_warmup,
         # batch_size, target_model_update, nb_actions
         
-        self.state_dim  = state_dim
-        self.action_dim = action_dim
         self.policy = policy
         
         self.model = model
@@ -30,14 +28,12 @@ class ActionStateModel:
         #     "E":percent_explored,
         #     "g":goals
         # }
+        input_state = state.copy()
 
-        map_input = state.pop("m")
-        map_input = map_input.reshape(batch_size, *map_input.shape)
-
-        fc_input = np.concatenate(list(state.values()))
-        fc_input = fc_input.reshape(batch_size, *fc_input.shape)
-
-        return self.model.predict([map_input, fc_input])
+        if batch_size > 1:
+            self.model.predict_on_batch(state)
+        else:
+            return self.model.predict(state)
     
     def select_action(self, state):
         q_value = self.predict(state)

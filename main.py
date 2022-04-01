@@ -1,5 +1,7 @@
+# from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
 from agents.mac_dec_ddqn import MacDecDDQNAgent
-# from agents.nearest_frontier import NearestFrontierAgent
+# import env as multi_agent_grid
+# from env.actions import Action
 from env.multi_agent_grid import parallel_env
 
 def all_complete(done_dict):
@@ -10,21 +12,20 @@ def all_complete(done_dict):
     return True
 
 def fit(env, agents, nb_episodes, visualise=False):
+
     # Start training
     for ep_idx in range(nb_episodes):            
             
         states = env.reset()
         env.render()
-
         print("Starting episode", ep_idx + 1)
         dones = {agent: False for agent in agents.keys()}
-
-        i = 0
+        
         while not all_complete(dones):
-            i += 1
-            actions = {agent_id: agent.get_action(states[agent_id], dones[agent_id]) for agent_id, agent in agents.items()}
-            print(i, actions)
+            # actions = {agent_id: agent.get_action(states[agent_id]) for agent_id, agent in agents.items()}
+            actions = {agent_id: agent.get_action(states[agent_id]) for agent_id, agent in agents.items()}
             states, rewards, dones, _ = env.step(actions)
+            # print(rewards)
 
             for agent_id, agent in agents.items():
                 agent.append_to_mem(states[agent_id], actions[agent_id], rewards[agent_id], dones[agent_id])
@@ -42,19 +43,18 @@ def fit(env, agents, nb_episodes, visualise=False):
 
 def main():
     training_config = {
-        "n_episodes":100
+        "n_episodes":5
     }
 
     env_config = {
         "map_shape":(20, 20),
         "n_agents":3,
         "seed":0,
-        # "clutter_density":0.8,
+        # "clutter_density":0.2,
         "max_steps":75,
         "pad_output":False,
         "agent_view_shape":(9, 9),
-        "screen_size":500,
-        "logfile_dir":"./ddqn_history.json"
+        "screen_size":500
     }
 
     # Create env

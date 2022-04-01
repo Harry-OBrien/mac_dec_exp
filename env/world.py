@@ -23,6 +23,7 @@ class MultiAgentWorld():
     def reset(self):
         self._generate_maps()
         self.agent_locations = {agent:self._get_free_location() for agent in self._agents}
+        print("placed agents at", self.agent_locations)
 
         self._explorable_cells = self._find_agent_exploration_area()
 
