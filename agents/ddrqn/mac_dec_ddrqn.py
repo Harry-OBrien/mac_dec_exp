@@ -12,7 +12,7 @@ import numpy as np
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, LeakyReLU, Input, concatenate
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Flatten, Conv2D, LeakyReLU, Input, concatenate
 
 from rl.policy import MaxBoltzmannQPolicy
 
@@ -112,6 +112,9 @@ class MacDecDDQNAgent(Base_Agent):
         z = LeakyReLU()(z)
 
         z = Dense(64,  name="F5")(z)
+        z = LeakyReLU()(z)
+
+        z = LSTM(64,  name="LSTM")(z)
         z = LeakyReLU()(z)
 
         z = Dense(64,  name="F6")(z)

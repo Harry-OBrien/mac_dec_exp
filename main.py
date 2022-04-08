@@ -1,5 +1,5 @@
 # from agents.mac_dec_ddqn import Mac_Dec_DDQN_Agent
-from agents.mac_dec_ddqn import MacDecDDQNAgent
+from agents.ddqn.mac_dec_ddqn import MacDecDDQNAgent
 # import env as multi_agent_grid
 # from env.actions import Action
 from env.multi_agent_grid import parallel_env
@@ -59,7 +59,7 @@ def main():
 
     # Create env
     env = parallel_env(**env_config)
-    
+
     # Initialise agents
     agents = {}
     for agent in env.possible_agents:
